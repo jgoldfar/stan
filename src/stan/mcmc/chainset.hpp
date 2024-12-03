@@ -253,7 +253,7 @@ class chainset {
   double median(const std::string& name) const { return median(index(name)); }
 
   /**
-   * Compute maximum absolute deviation (mad) for specified parameter.
+   * Compute median absolute deviation (mad) for specified parameter.
    *
    * Follows R implementation:  constant * median(abs(x - center))
    * where the value of center is median(x) and the constant is 1.4826,
@@ -263,16 +263,20 @@ class chainset {
    * @param index parameter index
    * @return sample mad
    */
-  double max_abs_deviation(const int index) const {
+  double med_abs_deviation(const int index) const {
     Eigen::MatrixXd draws = samples(index);
     auto center = median(index);
     Eigen::MatrixXd abs_dev = (draws.array() - center).abs();
     Eigen::Map<Eigen::VectorXd> map(abs_dev.data(), abs_dev.size());
-    return 1.4826 * stan::math::quantile(map, 0.5);
+    try {
+      return 1.4826 * stan::math::quantile(map, 0.5);
+    } catch (const std::logic_error& e) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
   }
 
   /**
-   * Compute maximum absolute deviation (mad) for specified parameter.
+   * Compute median absolute deviation (mad) for specified parameter.
    *
    * Follows R implementation:  constant * median(abs(x - center))
    * where the value of center is median(x) and the constant is 1.4826,
@@ -282,27 +286,33 @@ class chainset {
    * @param name parameter name
    * @return sample mad
    */
-  double max_abs_deviation(const std::string& name) const {
-    return max_abs_deviation(index(name));
+  double med_abs_deviation(const std::string& name) const {
+    return med_abs_deviation(index(name));
   }
 
   /**
    * Compute the quantile value of the specified parameter
-   * at the specified probability.
+   * at the specified probability via a call to stan::math::quantile.
    *
    * Calls stan::math::quantile which throws
    * std::invalid_argument If any element of samples_vec is NaN, or size 0.
    * and std::domain_error If `p<0` or `p>1`.
+   * If this happens, error will be caught, quantile value is NaN.
    *
    * @param index parameter index
    * @param prob probability
    * @return parameter value at quantile
    */
   double quantile(const int index, const double prob) const {
-    // Ensure the probability is within [0, 1]
     Eigen::MatrixXd draws = samples(index);
     Eigen::Map<Eigen::VectorXd> map(draws.data(), draws.size());
-    return stan::math::quantile(map, prob);
+    double result;
+    try {
+      result = stan::math::quantile(map, prob);
+    } catch (const std::logic_error& e) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return result;
   }
 
   /**
@@ -321,6 +331,11 @@ class chainset {
    * Compute the quantile values of the specified parameter
    * for a set of specified probabilities.
    *
+   * Calls stan::math::quantile which throws
+   * std::invalid_argument If any element of samples_vec is NaN, or size 0.
+   * and std::domain_error If `p<0` or `p>1`.
+   * If this happens, error will be caught, quantile value is NaN.
+   *
    * @param index parameter index
    * @param probs vector of probabilities
    * @return vector of parameter values for quantiles
@@ -332,7 +347,14 @@ class chainset {
     Eigen::MatrixXd draws = samples(index);
     Eigen::Map<Eigen::VectorXd> map(draws.data(), draws.size());
     std::vector<double> probs_vec(probs.data(), probs.data() + probs.size());
-    std::vector<double> quantiles = stan::math::quantile(map, probs_vec);
+    std::vector<double> quantiles;
+    try {
+      quantiles = stan::math::quantile(map, probs_vec);
+    } catch (const std::logic_error& e) {
+      Eigen::VectorXd nans(probs.size());
+      nans.setConstant(std::numeric_limits<double>::quiet_NaN());
+      return nans;
+    }
     return Eigen::Map<Eigen::VectorXd>(quantiles.data(), quantiles.size());
   }
 

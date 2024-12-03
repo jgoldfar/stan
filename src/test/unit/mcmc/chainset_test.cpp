@@ -170,7 +170,7 @@ TEST_F(McmcChains, summary_stats) {
   EXPECT_NEAR(theta_sd_expect, bern_chains.sd("theta"), 1e-5);
 
   double theta_mad_expect = 0.12309;
-  EXPECT_NEAR(theta_mad_expect, bern_chains.max_abs_deviation("theta"), 1e-5);
+  EXPECT_NEAR(theta_mad_expect, bern_chains.med_abs_deviation("theta"), 1e-5);
 
   double theta_mcse_mean_expect = 0.003234;
   EXPECT_NEAR(theta_mcse_mean_expect, bern_chains.mcse_mean("theta"), 1e-4);
@@ -205,5 +205,34 @@ TEST_F(McmcChains, summary_stats) {
   auto theta_ac = bern_chains.autocorrelation(0, "theta");
   for (size_t i = 0; i < 10; ++i) {
     EXPECT_NEAR(theta_ac(i), theta_ac_expect(i), 0.0005);
+  }
+}
+
+TEST_F(McmcChains, quantile_tests) {
+  std::ifstream datagen_stream;
+  datagen_stream.open("src/test/unit/mcmc/test_csv_files/datagen_output.csv",
+                      std::ifstream::in);
+  stan::io::stan_csv datagen_csv
+      = stan::io::stan_csv_reader::parse(datagen_stream, &out);
+  datagen_stream.close();
+  stan::mcmc::chainset datagen_chains(datagen_csv);
+
+  Eigen::VectorXd probs(6);
+  probs << 0.0, 0.01, 0.05, 0.95, 0.99, 1.0;
+  Eigen::VectorXd stepsize_quantiles
+      = datagen_chains.quantiles("stepsize__", probs);
+  for (size_t i = 0; i < probs.size(); ++i) {
+    EXPECT_TRUE(std::isnan(stepsize_quantiles(i)));
+  }
+
+  double stepsize_MAD = datagen_chains.med_abs_deviation("stepsize__");
+  EXPECT_TRUE(std::isnan(stepsize_MAD));
+
+  Eigen::VectorXd bad_probs(3);
+  bad_probs << 5, 50, 95;
+  Eigen::VectorXd y_sim_quantiles
+      = datagen_chains.quantiles("y_sim[1]", bad_probs);
+  for (size_t i = 0; i < bad_probs.size(); ++i) {
+    EXPECT_TRUE(std::isnan(y_sim_quantiles(i)));
   }
 }
