@@ -305,11 +305,10 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals = parameter.values_;
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.rows(), 10);
-  EXPECT_EQ(param_vals.cols(), 8000);
+  EXPECT_EQ(10, parameter.eigen_states_[0].size());
+  EXPECT_EQ(8000, parameter.eigen_states_.size());
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
@@ -318,7 +317,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   constexpr double init_radius = 1;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
-  constexpr double num_elbo_draws = 1000;
+  constexpr double num_elbo_draws = 10;
   // Should return num_paths * num_draws = 8000
   constexpr double num_draws = 2000;
   constexpr int history_size = 15;
@@ -355,21 +354,21 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals = parameter.values_;
+  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
+    parameter.eigen_states_[0].size());
+  for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
+    param_vals.row(i) = parameter.eigen_states_[i];
+  }
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.rows(), 10);
-  EXPECT_EQ(param_vals.cols(), 8000);
-  for (Eigen::Index paths_i = 0; paths_i < num_paths; ++paths_i) {
-    // Iterate over each set of results from the single pathfinders
-    for (Eigen::Index i = 0; i < num_elbo_draws; ++i) {
-      EXPECT_FALSE(std::isnan(param_vals.coeff(1, num_draws * paths_i + i)));
-    }
-    for (Eigen::Index i = 0; i < (num_draws - num_elbo_draws); ++i) {
-      EXPECT_TRUE(std::isnan(
-          param_vals.coeff(1, num_draws * paths_i + num_elbo_draws + i)));
-    }
+  EXPECT_EQ(param_vals.cols(), 10);
+  EXPECT_EQ(param_vals.rows(), 8000);
+
+  // Iterate over each set of results from the single pathfinders
+  for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
+    EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1)));
   }
+
 }
 
 TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
@@ -414,22 +413,20 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
-
-  Eigen::MatrixXd param_vals = parameter.values_;
+  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
+    parameter.eigen_states_[0].size());
+  for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
+    param_vals.row(i) = parameter.eigen_states_[i];
+  }
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.rows(), 10);
-  EXPECT_EQ(param_vals.cols(), 8000);
-  for (Eigen::Index paths_i = 0; paths_i < num_paths; ++paths_i) {
-    // Iterate over each set of results from the single pathfinders
-    for (Eigen::Index i = 0; i < num_elbo_draws; ++i) {
-      EXPECT_FALSE(std::isnan(param_vals.coeff(1, num_draws * paths_i + i)));
-    }
-    for (Eigen::Index i = 0; i < (num_draws - num_elbo_draws); ++i) {
-      EXPECT_TRUE(std::isnan(
-          param_vals.coeff(1, num_draws * paths_i + num_elbo_draws + i)));
-    }
+
+  EXPECT_EQ(param_vals.cols(), 10);
+  EXPECT_EQ(param_vals.rows(), 8000);
+  for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
+      EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
   }
+
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
@@ -475,15 +472,19 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals = parameter.values_;
+  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
+    parameter.eigen_states_[0].size());
+  for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
+    param_vals.row(i) = parameter.eigen_states_[i];
+  }
+
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.rows(), 10);
-  EXPECT_EQ(param_vals.cols(), 8000);
-  for (Eigen::Index paths_i = 0; paths_i < num_paths; ++paths_i) {
-    // Iterate over each set of results from the single pathfinders
-    for (Eigen::Index i = 0; i < num_draws; ++i) {
-      EXPECT_FALSE(std::isnan(param_vals.coeff(1, num_draws * paths_i + i)));
-    }
+  EXPECT_EQ(param_vals.cols(), 10);
+  EXPECT_EQ(param_vals.rows(), 8000);
+  // Iterate over each set of results from the single pathfinders
+  for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
+    EXPECT_FALSE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
   }
+
 }

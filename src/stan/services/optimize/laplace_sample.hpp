@@ -55,9 +55,9 @@ void laplace_sample(const Model& model, const Eigen::VectorXd& theta_hat,
   // create log density functor for vars and vals
   std::stringstream log_density_msgs;
   auto log_density_fun
-      = [&](const Eigen::Matrix<stan::math::var, -1, 1>& theta) {
+      = [&](auto& theta) {
           return model.template log_prob<true, jacobian, stan::math::var>(
-              const_cast<Eigen::Matrix<stan::math::var, -1, 1>&>(theta),
+              theta,
               &log_density_msgs);
         };
 
