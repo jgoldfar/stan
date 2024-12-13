@@ -58,20 +58,6 @@ class unique_stream_writer final : public writer {
       return;
     write_vector(names);
   }
-  /**
-   * Writes a set of names on a single line in csv format followed
-   * by a newline.
-   *
-   * Note: the names are not escaped.
-   *
-   * @param[in] names Names in a std::vector
-   * @param[in, out] ss A stringstream to use as a buffer
-   */
-  void operator()(const std::vector<std::string>& names, std::stringstream& ss) {
-    if (output_ == nullptr)
-      return;
-    write_vector(names, ss);
-  }
 
   /**
    * Get the underlying stream
@@ -91,20 +77,6 @@ class unique_stream_writer final : public writer {
       return;
     write_vector(values);
   }
-  /**
-   * Writes a set of values in csv format followed by a newline.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] values Values in a std::vector
-   * @param[in, out] ss ignored
-   */
-  void operator()(const std::vector<double>& values, std::stringstream& ss) {
-    if (output_ == nullptr)
-      return;
-    write_vector(values);
-  }
 
   /**
    * Writes multiple rows and columns of values in csv format.
@@ -116,95 +88,11 @@ class unique_stream_writer final : public writer {
    * parameters in the rows and samples in the columns. The matrix is then
    * transposed for the output.
    */
-  void operator()(const Eigen::Matrix<double, -1, -1>& values) {
+  void operator()(const Eigen::Ref<Eigen::Matrix<double, -1, -1>>& values) {
     if (output_ == nullptr)
       return;
     *output_ << values.transpose().format(CommaInitFmt);
   }
-
-  /**
-   * Writes multiple rows and columns of values in csv format.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] values A matrix of values. The input is expected to have
-   * parameters in the rows and samples in the columns. The matrix is then
-   * transposed for the output.
-   * @param[in, out] ss ignored
-   */
-  void operator()(const Eigen::Matrix<double, -1, -1>& values, std::stringstream& /* ss */) {
-    if (output_ == nullptr)
-      return;
-    *output_ << values.transpose().format(CommaInitFmt);
-  }
-
-  /**
-   * Writes a row of values in csv format.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] values A row vector of values. The input is expected to have
-   * samples in the columns.
-   * @param[in, out] ss ignored
-   */
-   void operator()(const Eigen::Matrix<double, 1, -1>& values) {
-    if (output_ == nullptr)
-      return;
-    *output_ << values.format(CommaInitFmt);
-  }
-
-  /**
-   * Writes a row of values in csv format.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] values A row vector of values. The input is expected to have
-   * samples in the columns.
-   * @param[in, out] ss ignored
-   */
-  void operator()(const Eigen::Matrix<double, 1, -1>& values, std::stringstream& /* ss */) {
-    if (output_ == nullptr)
-      return;
-    *output_ << values.format(CommaInitFmt);
-  }
-
-  /**
-   * Writes a row of values in csv format.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] values A column vector of values. The input is expected to have
-   * samples in the rows. The matrix is then
-   * transposed for the output.
-   * @param[in, out] ss ignored
-   */
-  void operator()(const Eigen::Matrix<double, -1, 1>& values) {
-    if (output_ == nullptr)
-      return;
-    *output_ << values.transpose().format(CommaInitFmt);
-  }
-
-  /**
-   * Writes a row of values in csv format.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] values A column vector of values. The input is expected to have
-   * samples in the rows. The matrix is then
-   * transposed for the output.
-   */
-  void operator()(const Eigen::Matrix<double, -1, 1>& values, std::stringstream& /* ss */) {
-    if (output_ == nullptr)
-      return;
-    *output_ << values.transpose().format(CommaInitFmt);
-  }
-
-
 
   /**
    * Writes the comment_prefix to the stream followed by a newline.
@@ -221,18 +109,6 @@ class unique_stream_writer final : public writer {
    * @param[in] message A string
    */
   void operator()(const std::string& message) {
-    if (output_ == nullptr)
-      return;
-    *output_ << comment_prefix_ << message << std::endl;
-  }
-
-  /**
-   * Writes the comment_prefix then the message followed by a newline.
-   *
-   * @param[in] message A string
-   @ @param[in, out] ss ignored
-   */
-  void operator()(const std::string& message, std::stringstream& /* ss */) {
     if (output_ == nullptr)
       return;
     *output_ << comment_prefix_ << message << std::endl;
@@ -276,30 +152,6 @@ class unique_stream_writer final : public writer {
       *output_ << *it << ",";
     }
     *output_ << v.back() << std::endl;
-  }
-  /**
-   * Writes a set of values in csv format followed by a newline.
-   *
-   * Note: the precision of the output is determined by the settings
-   *  of the stream on construction.
-   *
-   * @param[in] v Values in a std::vector
-   * @param[in, out] ss A stringstream to use as a buffer
-   */
-  template <class T>
-  void write_vector(const std::vector<T>& v, std::stringstream& ss) {
-    if (output_ == nullptr)
-      return;
-    if (v.empty()) {
-      return;
-    }
-    auto last = v.end();
-    --last;
-    for (auto it = v.begin(); it != last; ++it) {
-      ss << *it << ",";
-    }
-    ss << v.back() << std::endl;
-    *output_ << ss.str();
   }
 };
 
