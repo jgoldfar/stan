@@ -205,7 +205,6 @@ inline int pathfinder_lbfgs_multi(
             }
           }
         });
-
   } catch (const std::exception& e) {
     logger.error(e.what());
     return error_codes::SOFTWARE;
