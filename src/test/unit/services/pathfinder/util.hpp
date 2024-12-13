@@ -154,8 +154,10 @@ class in_memory_writer : public stan::callbacks::stream_writer {
    * @param[in] names Names in a std::vector
    */
   void operator()(const std::vector<std::string>& names) { names_ = names; }
+  void operator()(const std::vector<std::string>& names, std::stringstream& /* ss */) { names_ = names; }
 
   void operator()(const std::string& times) { times_.push_back(times); }
+  void operator()(const std::string& times, std::stringstream& /* ss */) { times_.push_back(times); }
   void operator()() { times_.push_back("\n"); }
   /**
    * Writes a set of values.
@@ -163,6 +165,9 @@ class in_memory_writer : public stan::callbacks::stream_writer {
    * @param[in] state Values in a std::vector
    */
   void operator()(const std::vector<double>& state) {
+    states_.push_back(state);
+  }
+  void operator()(const std::vector<double>& state, std::stringstream& /* ss */) {
     states_.push_back(state);
   }
   void operator()(
@@ -174,13 +179,24 @@ class in_memory_writer : public stan::callbacks::stream_writer {
   void operator()(const std::tuple<Eigen::VectorXd, Eigen::VectorXd>& xx) {
       optim_path_.push_back(xx);
   }
+
   template <typename EigVec, stan::require_eigen_vector_t<EigVec>* = nullptr>
   void operator()(const EigVec& vals) {
     eigen_states_.push_back(vals);
   }
+  template <typename EigVec, stan::require_eigen_vector_t<EigVec>* = nullptr>
+  void operator()(const EigVec& vals, std::stringstream& /* ss */) {
+    eigen_states_.push_back(vals);
+  }
+
   template <typename EigMat,
             stan::require_eigen_matrix_dynamic_t<EigMat>* = nullptr>
   void operator()(const EigMat& vals) {
+    values_ = vals;
+  }
+  template <typename EigMat,
+            stan::require_eigen_matrix_dynamic_t<EigMat>* = nullptr>
+  void operator()(const EigMat& vals, std::stringstream& /* ss */) {
     values_ = vals;
   }
 };

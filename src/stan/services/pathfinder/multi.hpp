@@ -24,11 +24,30 @@ namespace services {
 namespace pathfinder {
 
 namespace internal {
+/**
+  * Generate a single draw from the pathfinder algorithm.
+  * @tparam DoAll If true, generate all draws. If false, generate only the
+  * draw at `path_sample_idx`.
+  * @tparam ConstrainFun A functor with a valid `operator(EigVector, EigVector, Model, RNG)`
+  * @tparam Model A model implementation
+  * @tparam ElboEst A struct with the ELBO estimate
+  * @tparam RNG A random number generator
+  * @tparam ParamWriter A writer callback for parameter values
+  * @param[in] constrain_fun A functor to transform parameters to the constrained
+  * space
+  * @param[in] model A model implementation
+  * @param[in] elbo_est A struct with the ELBO estimate
+  * @param[in] path_num The path number
+  * @param[in] path_sample_idx The index of the sample to generate
+  * @param[in] rng A random number generator
+  * @param[in] param_writer A writer callback for parameter values
+  * @param[in,out] stream A stream to write the output
+  */
   template <bool DoAll = false, typename ConstrainFun, typename Model, typename ElboEst, typename RNG, typename ParamWriter>
   inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
     ElboEst&& elbo_est, const Eigen::Index path_num,
     const Eigen::Index path_sample_idx,
-    RNG&& rng, ParamWriter&& param_writer) {
+    RNG&& rng, ParamWriter&& param_writer, std::stringstream& stream) {
       // FIX THESE
       auto&& lp_draws = elbo_est.lp_mat;
       auto&& new_draws = elbo_est.repeat_draws;
@@ -42,14 +61,17 @@ namespace internal {
       Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(uc_param_size + 2);
       sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
       sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-      param_writer(sample_row);
+      param_writer(sample_row, stream);
       if constexpr (DoAll) {
         for (int i = 1; i < num_samples; ++i) {
           unconstrained_col = new_draws.col(i);
           constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
           sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
           sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-          param_writer(sample_row);
+          param_writer(sample_row, stream);
+          if (stream.rdbuf()) {
+            stream.rdbuf()->pubseekpos(0);
+          }
         }
       }
   }
@@ -176,14 +198,16 @@ inline int pathfinder_lbfgs_multi(
             if (psis_resample && calculate_lp) {
               elbo_estimates.push_back(std::move(std::get<1>(pathfinder_ret)));
             } else {
+              std::stringstream stream;
               stan::rng_t rng = util::create_rng(random_seed, stride_id + iter);
               std::lock_guard<std::mutex> lock(write_mutex);
               internal::gen_pathfinder_draw<true>(constrain_fun, model,
                 std::get<1>(pathfinder_ret), 0, 0,
-                rng, parameter_writer);
+                rng, parameter_writer, stream);
             }
           }
         });
+
   } catch (const std::exception& e) {
     logger.error(e.what());
     return error_codes::SOFTWARE;
@@ -214,6 +238,7 @@ inline int pathfinder_lbfgs_multi(
                      boost::iterator_range<double*>(
                          weight_vals.data(),
                          weight_vals.data() + weight_vals.size())));
+    std::stringstream stream;
     for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
       auto draw_idx = rand_psis_idx();
       // Calculate which pathfinder the draw came from
@@ -221,7 +246,11 @@ inline int pathfinder_lbfgs_multi(
       auto path_sample_idx = draw_idx % num_draws;
       auto&& elbo_est = elbo_estimates[path_num];
       internal::gen_pathfinder_draw(constrain_fun, model, elbo_est,
-        path_num, path_sample_idx, rng, parameter_writer);
+        path_num, path_sample_idx, rng, parameter_writer, stream);
+      if (stream.rdbuf()) {
+        stream.rdbuf()->pubseekpos(0);
+      }
+
     }
     const auto end_psis_time = std::chrono::steady_clock::now();
     psis_delta_time
