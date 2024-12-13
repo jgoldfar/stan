@@ -355,7 +355,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   ASSERT_EQ(rc, 0);
 
   Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-    parameter.eigen_states_[0].size());
+                             parameter.eigen_states_[0].size());
   for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
     param_vals.row(i) = parameter.eigen_states_[i];
   }
@@ -368,7 +368,6 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
     EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1)));
   }
-
 }
 
 TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
@@ -414,7 +413,7 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
   Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-    parameter.eigen_states_[0].size());
+                             parameter.eigen_states_[0].size());
   for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
     param_vals.row(i) = parameter.eigen_states_[i];
   }
@@ -424,9 +423,8 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   EXPECT_EQ(param_vals.cols(), 10);
   EXPECT_EQ(param_vals.rows(), 8000);
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
-      EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
+    EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
   }
-
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
@@ -473,7 +471,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   ASSERT_EQ(rc, 0);
 
   Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-    parameter.eigen_states_[0].size());
+                             parameter.eigen_states_[0].size());
   for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
     param_vals.row(i) = parameter.eigen_states_[i];
   }
@@ -486,5 +484,4 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
     EXPECT_FALSE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
   }
-
 }

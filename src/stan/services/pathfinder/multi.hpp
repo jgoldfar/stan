@@ -25,53 +25,56 @@ namespace pathfinder {
 
 namespace internal {
 /**
-  * Generate a single draw from the pathfinder algorithm.
-  * @tparam DoAll If true, generate all draws. If false, generate only the
-  * draw at `path_sample_idx`.
-  * @tparam ConstrainFun A functor with a valid `operator(EigVector, EigVector, Model, RNG)`
-  * @tparam Model A model implementation
-  * @tparam ElboEst A struct with the ELBO estimate
-  * @tparam RNG A random number generator
-  * @tparam ParamWriter A writer callback for parameter values
-  * @param[in] constrain_fun A functor to transform parameters to the constrained
-  * space
-  * @param[in] model A model implementation
-  * @param[in] elbo_est A struct with the ELBO estimate
-  * @param[in] path_num The path number
-  * @param[in] path_sample_idx The index of the sample to generate
-  * @param[in] rng A random number generator
-  * @param[in] param_writer A writer callback for parameter values
-  */
-  template <bool DoAll = false, typename ConstrainFun, typename Model, typename ElboEst, typename RNG, typename ParamWriter>
-  inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
-    ElboEst&& elbo_est, const Eigen::Index path_num,
-    const Eigen::Index path_sample_idx,
-    RNG&& rng, ParamWriter&& param_writer) {
-      // FIX THESE
-      auto&& lp_draws = elbo_est.lp_mat;
-      auto&& new_draws = elbo_est.repeat_draws;
-      const Eigen::Index param_size = new_draws.rows();
-      const auto num_samples = new_draws.cols();
-      Eigen::VectorXd unconstrained_col;
-      Eigen::VectorXd approx_samples_constrained_col;
-      unconstrained_col = new_draws.col(path_sample_idx);
-      constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
-      const auto uc_param_size = approx_samples_constrained_col.size();
-      Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(uc_param_size + 2);
+ * Generate a single draw from the pathfinder algorithm.
+ * @tparam DoAll If true, generate all draws. If false, generate only the
+ * draw at `path_sample_idx`.
+ * @tparam ConstrainFun A functor with a valid `operator(EigVector, EigVector,
+ * Model, RNG)`
+ * @tparam Model A model implementation
+ * @tparam ElboEst A struct with the ELBO estimate
+ * @tparam RNG A random number generator
+ * @tparam ParamWriter A writer callback for parameter values
+ * @param[in] constrain_fun A functor to transform parameters to the constrained
+ * space
+ * @param[in] model A model implementation
+ * @param[in] elbo_est A struct with the ELBO estimate
+ * @param[in] path_num The path number
+ * @param[in] path_sample_idx The index of the sample to generate
+ * @param[in] rng A random number generator
+ * @param[in] param_writer A writer callback for parameter values
+ */
+template <bool DoAll = false, typename ConstrainFun, typename Model,
+          typename ElboEst, typename RNG, typename ParamWriter>
+inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
+                                ElboEst&& elbo_est, const Eigen::Index path_num,
+                                const Eigen::Index path_sample_idx, RNG&& rng,
+                                ParamWriter&& param_writer) {
+  // FIX THESE
+  auto&& lp_draws = elbo_est.lp_mat;
+  auto&& new_draws = elbo_est.repeat_draws;
+  const Eigen::Index param_size = new_draws.rows();
+  const auto num_samples = new_draws.cols();
+  Eigen::VectorXd unconstrained_col;
+  Eigen::VectorXd approx_samples_constrained_col;
+  unconstrained_col = new_draws.col(path_sample_idx);
+  constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
+  const auto uc_param_size = approx_samples_constrained_col.size();
+  Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(uc_param_size + 2);
+  sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
+  sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+  param_writer(sample_row);
+  if constexpr (DoAll) {
+    for (int i = 1; i < num_samples; ++i) {
+      unconstrained_col = new_draws.col(i);
+      constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
+                    rng);
       sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
       sample_row.tail(uc_param_size) = approx_samples_constrained_col;
       param_writer(sample_row);
-      if constexpr (DoAll) {
-        for (int i = 1; i < num_samples; ++i) {
-          unconstrained_col = new_draws.col(i);
-          constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
-          sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-          sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-          param_writer(sample_row);
-        }
-      }
+    }
   }
 }
+}  // namespace internal
 
 /**
  * Runs multiple pathfinders with final approximate samples drawn using PSIS.
@@ -197,8 +200,8 @@ inline int pathfinder_lbfgs_multi(
               stan::rng_t rng = util::create_rng(random_seed, stride_id + iter);
               std::lock_guard<std::mutex> lock(write_mutex);
               internal::gen_pathfinder_draw<true>(constrain_fun, model,
-                std::get<1>(pathfinder_ret), 0, 0,
-                rng, parameter_writer);
+                                                  std::get<1>(pathfinder_ret),
+                                                  0, 0, rng, parameter_writer);
             }
           }
         });
@@ -208,7 +211,8 @@ inline int pathfinder_lbfgs_multi(
     return error_codes::SOFTWARE;
   }
   const auto end_pathfinders_time = std::chrono::steady_clock::now();
-  auto pathfinders_delta_time = stan::services::util::duration_diff(start_pathfinders_time, end_pathfinders_time);
+  auto pathfinders_delta_time = stan::services::util::duration_diff(
+      start_pathfinders_time, end_pathfinders_time);
   double psis_delta_time = 0;
   stan::rng_t rng = util::create_rng(random_seed, stride_id);
   if (psis_resample && calculate_lp) {
@@ -239,9 +243,8 @@ inline int pathfinder_lbfgs_multi(
       Eigen::Index path_num = std::floor(draw_idx / num_draws);
       auto path_sample_idx = draw_idx % num_draws;
       auto&& elbo_est = elbo_estimates[path_num];
-      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est,
-        path_num, path_sample_idx, rng, parameter_writer);
-
+      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est, path_num,
+                                    path_sample_idx, rng, parameter_writer);
     }
     const auto end_psis_time = std::chrono::steady_clock::now();
     psis_delta_time

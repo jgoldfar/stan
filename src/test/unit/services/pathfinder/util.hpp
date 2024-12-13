@@ -143,7 +143,8 @@ class in_memory_writer : public stan::callbacks::stream_writer {
   std::vector<std::string> times_;
   tbb::concurrent_vector<std::vector<double>> states_;
   tbb::concurrent_vector<Eigen::VectorXd> eigen_states_;
-  tbb::concurrent_vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> optim_path_;
+  tbb::concurrent_vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>>
+      optim_path_;
   Eigen::MatrixXd values_;
   in_memory_writer(std::ostream& stream)
       : stan::callbacks::stream_writer(stream) {}
@@ -172,7 +173,7 @@ class in_memory_writer : public stan::callbacks::stream_writer {
     }
   }
   void operator()(const std::tuple<Eigen::VectorXd, Eigen::VectorXd>& xx) {
-      optim_path_.push_back(xx);
+    optim_path_.push_back(xx);
   }
   template <typename EigVec, stan::require_eigen_vector_t<EigVec>* = nullptr>
   void operator()(const EigVec& vals) {

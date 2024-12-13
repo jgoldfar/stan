@@ -463,7 +463,8 @@ template <bool ReturnLpSamples, typename EigVec,
           std::enable_if_t<ReturnLpSamples>* = nullptr>
 inline auto ret_pathfinder(int return_code, EigVec&& elbo_est,
                            const std::atomic<size_t>& lp_calls) {
-  return std::make_tuple(return_code, std::forward<EigVec>(elbo_est), lp_calls.load());
+  return std::make_tuple(return_code, std::forward<EigVec>(elbo_est),
+                         lp_calls.load());
 }
 
 template <bool ReturnLpSamples, typename EigVec,
@@ -615,8 +616,8 @@ inline auto pathfinder_lbfgs_single(
                                           logger, init_writer);
   } catch (const std::exception& e) {
     logger.error(e.what());
-    return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::SOFTWARE, internal::elbo_est_t{}, 0);
+    return internal::ret_pathfinder<ReturnLpSamples>(error_codes::SOFTWARE,
+                                                     internal::elbo_est_t{}, 0);
   }
 
   const auto num_parameters = cont_vector.size();
@@ -863,10 +864,10 @@ inline auto pathfinder_lbfgs_single(
   }
   if constexpr (ReturnLpSamples) {
     internal::elbo_est_t est_draws = internal::est_approx_draws<false>(
-            lp_fun, constrain_fun, rng, taylor_approx_best, num_draws,
-            taylor_approx_best.alpha, path_num, logger, calculate_lp);
-    return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
-      std::move(est_draws), num_evals + est_draws.fn_calls);
+        lp_fun, constrain_fun, rng, taylor_approx_best, num_draws,
+        taylor_approx_best.alpha, path_num, logger, calculate_lp);
+    return internal::ret_pathfinder<ReturnLpSamples>(
+        error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls);
   } else {
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> constrained_draws_mat;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratio;
@@ -884,14 +885,14 @@ inline auto pathfinder_lbfgs_single(
         auto&& new_lp_ratio = est_draws.lp_ratio;
         auto&& lp_draws = est_draws.lp_mat;
         auto&& new_draws = est_draws.repeat_draws;
-        lp_ratio = Eigen::Array<double, Eigen::Dynamic, 1>(elbo_lp_ratio.size()
-                                                          + new_lp_ratio.size());
+        lp_ratio = Eigen::Array<double, Eigen::Dynamic, 1>(
+            elbo_lp_ratio.size() + new_lp_ratio.size());
         lp_ratio.head(elbo_lp_ratio.size()) = elbo_lp_ratio.array();
         lp_ratio.tail(new_lp_ratio.size()) = new_lp_ratio.array();
         const auto total_size = elbo_draws.cols() + new_draws.cols();
         constrained_draws_mat
-            = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>(names.size(),
-                                                                    total_size);
+            = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>(
+                names.size(), total_size);
         Eigen::VectorXd unconstrained_col;
         Eigen::VectorXd approx_samples_constrained_col;
         for (Eigen::Index i = 0; i < elbo_draws.cols(); ++i) {
@@ -903,7 +904,7 @@ inline auto pathfinder_lbfgs_single(
                     .matrix();
         }
         for (Eigen::Index i = elbo_draws.cols(), j = 0; i < total_size;
-            ++i, ++j) {
+             ++i, ++j) {
           constrained_draws_mat.col(i).head(2) = lp_draws.row(j).matrix();
           unconstrained_col = new_draws.col(j);
           constrained_draws_mat.col(i).tail(num_unconstrained_params)
@@ -913,7 +914,8 @@ inline auto pathfinder_lbfgs_single(
         }
       } catch (const std::domain_error& e) {
         std::string err_msg = e.what();
-        logger.warn(path_num + "Final sampling approximation failed with error: "
+        logger.warn(path_num
+                    + "Final sampling approximation failed with error: "
                     + err_msg);
         logger.info(
             path_num
@@ -958,12 +960,11 @@ inline auto pathfinder_lbfgs_single(
         start_pathfinder_time, end_pathfinder_time);
     std::string pathfinder_time_str = "Elapsed Time: ";
     pathfinder_time_str += std::to_string(pathfinder_delta_time)
-                          + std::string(" seconds (Pathfinder)");
+                           + std::string(" seconds (Pathfinder)");
     parameter_writer(pathfinder_time_str);
     parameter_writer();
     return internal::ret_pathfinder<ReturnLpSamples>(
         error_codes::OK, internal::elbo_est_t{}, num_evals);
-
   }
 }
 
