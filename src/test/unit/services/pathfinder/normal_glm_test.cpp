@@ -52,7 +52,7 @@ class ServicesPathfinderGLM : public testing::Test {
   stan::json::json_data context;
   stan_model model;
 };
-
+constexpr std::array param_indices{0, 1, 3, 4, 5, 6, 7, 8, 9, 10};
 stan::io::array_var_context init_init_context() {
   std::vector<std::string> names_r{"b", "Intercept", "sigma"};
   std::vector<double> values_r{0, 0, 0, 0, 0, 0, 1};
@@ -96,36 +96,35 @@ TEST_F(ServicesPathfinderGLM, single) {
       init, parameter, diagnostics);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals = std::move(parameter.values_);
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
 
-  Eigen::VectorXd mean_vals = param_vals.rowwise().mean().eval();
-  Eigen::VectorXd sd_vals = (((param_vals.colwise() - mean_vals)
+  Eigen::RowVectorXd mean_vals = param_vals.colwise().mean().eval()(param_indices);
+  Eigen::RowVectorXd sd_vals = ((((param_vals(Eigen::all, param_indices).rowwise() - mean_vals)
                                   .array()
                                   .square()
                                   .matrix()
                                   .rowwise()
                                   .sum()
                                   .array()
-                              / (param_vals.cols() - 1))
+                              / (param_vals.rows() - 1))
                                  .sqrt())
                                 .transpose()
-                                .eval();
-
+                                .eval());
   auto prev_param_summary = stan::test::normal_glm_param_summary();
-  Eigen::VectorXd prev_mean_vals = prev_param_summary.first;
-  Eigen::VectorXd prev_sd_vals = prev_param_summary.second;
-  Eigen::MatrixXd ans_mean_diff = mean_vals - prev_mean_vals;
-  Eigen::MatrixXd ans_sd_diff = sd_vals - prev_sd_vals;
+  Eigen::Matrix<double, 1, 10> prev_mean_vals = prev_param_summary.first;
+  Eigen::Matrix<double, 1, 10> prev_sd_vals = prev_param_summary.second;
+  Eigen::RowVectorXd ans_mean_diff = mean_vals - prev_mean_vals;
+  Eigen::RowVectorXd ans_sd_diff = sd_vals - prev_sd_vals;
   Eigen::MatrixXd all_mean_vals(3, 10);
-  all_mean_vals.row(0) = mean_vals.transpose();
-  all_mean_vals.row(1) = prev_mean_vals.transpose();
-  all_mean_vals.row(2) = ans_mean_diff.transpose();
-  Eigen::MatrixXd all_sd_vals(3, 10);
-  all_sd_vals.row(0) = sd_vals.transpose();
-  all_sd_vals.row(1) = prev_sd_vals.transpose();
-  all_sd_vals.row(2) = ans_sd_diff.transpose();
+  all_mean_vals.row(0) = mean_vals;
+  all_mean_vals.row(1) = prev_mean_vals;
+  all_mean_vals.row(2) = ans_mean_diff;
+  Eigen::MatrixXd all_sd_vals(3, 1);
+  all_sd_vals.row(0) = sd_vals;
+  all_sd_vals.row(1) = prev_sd_vals;
+  all_sd_vals.row(2) = ans_sd_diff;
   // True Sd's are all 1 and true means are -4, -2, 0, 1, 3, -1
   for (int i = 2; i < all_mean_vals.cols(); ++i) {
     EXPECT_NEAR(0, all_mean_vals(2, i), .01);
@@ -168,13 +167,13 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
       num_elbo_draws, num_draws, save_iterations, refresh, callback, logger,
       init, parameter, diagnostics, calculate_lp);
   ASSERT_EQ(rc, 0);
-  Eigen::MatrixXd param_vals = std::move(parameter.values_);
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   for (Eigen::Index i = 0; i < num_elbo_draws; ++i) {
-    EXPECT_FALSE(std::isnan(param_vals.coeff(1, num_draws + i)))
+    EXPECT_FALSE(std::isnan(param_vals.coeff(num_draws + i, 1)))
         << "row: " << (num_draws + i);
   }
   for (Eigen::Index i = 0; i < (num_draws - num_elbo_draws); ++i) {
-    EXPECT_TRUE(std::isnan(param_vals.coeff(1, num_elbo_draws + i)))
+    EXPECT_TRUE(std::isnan(param_vals.coeff(num_elbo_draws + i, 1)))
         << "row: " << (num_draws + num_elbo_draws + i);
   }
 }
@@ -219,40 +218,35 @@ TEST_F(ServicesPathfinderGLM, multi) {
       diagnostics);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-                             parameter.eigen_states_[0].size());
-  for (size_t i = 0; i < parameter.eigen_states_.size(); ++i) {
-    param_vals.row(i) = parameter.eigen_states_[i];
-  }
-  param_vals.transposeInPlace();
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
 
-  Eigen::VectorXd mean_vals = param_vals.rowwise().mean().eval();
-  Eigen::VectorXd sd_vals = (((param_vals.colwise() - mean_vals)
+  Eigen::RowVectorXd mean_vals = param_vals.colwise().mean().eval()(param_indices);
+  Eigen::RowVectorXd sd_vals = ((((param_vals(Eigen::all, param_indices).rowwise() - mean_vals)
                                   .array()
                                   .square()
                                   .matrix()
                                   .rowwise()
                                   .sum()
                                   .array()
-                              / (param_vals.cols() - 1))
+                              / (param_vals.rows() - 1))
                                  .sqrt())
                                 .transpose()
-                                .eval();
+                                .eval());
   auto prev_param_summary = stan::test::normal_glm_param_summary();
-  Eigen::VectorXd prev_mean_vals = prev_param_summary.first;
-  Eigen::VectorXd prev_sd_vals = prev_param_summary.second;
-  Eigen::MatrixXd ans_mean_diff = mean_vals - prev_mean_vals;
-  Eigen::MatrixXd ans_sd_diff = sd_vals - prev_sd_vals;
+  Eigen::Matrix<double, 1, 10> prev_mean_vals = prev_param_summary.first;
+  Eigen::Matrix<double, 1, 10> prev_sd_vals = prev_param_summary.second;
+  Eigen::RowVectorXd ans_mean_diff = mean_vals - prev_mean_vals;
+  Eigen::RowVectorXd ans_sd_diff = sd_vals - prev_sd_vals;
   Eigen::MatrixXd all_mean_vals(3, 10);
-  all_mean_vals.row(0) = mean_vals.transpose();
-  all_mean_vals.row(1) = prev_mean_vals.transpose();
-  all_mean_vals.row(2) = ans_mean_diff.transpose();
+  all_mean_vals.row(0) = mean_vals;
+  all_mean_vals.row(1) = prev_mean_vals;
+  all_mean_vals.row(2) = ans_mean_diff;
   Eigen::MatrixXd all_sd_vals(3, 10);
-  all_sd_vals.row(0) = sd_vals.transpose();
-  all_sd_vals.row(1) = prev_sd_vals.transpose();
-  all_sd_vals.row(2) = ans_sd_diff.transpose();
+  all_sd_vals.row(0) = sd_vals;
+  all_sd_vals.row(1) = prev_sd_vals;
+  all_sd_vals.row(2) = ans_sd_diff;
   // True Sd's are all 1 and true means are -4, -2, 0, 1, 3, -1
   for (int i = 2; i < all_mean_vals.cols(); ++i) {
     EXPECT_NEAR(0, all_mean_vals(2, i), .01);
@@ -307,7 +301,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(10, parameter.eigen_states_[0].size());
+  EXPECT_EQ(11, parameter.eigen_states_[0].size());
   EXPECT_EQ(8000, parameter.eigen_states_.size());
 }
 
@@ -354,20 +348,21 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-                             parameter.eigen_states_[0].size());
-  for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
-    param_vals.row(i) = parameter.eigen_states_[i];
-  }
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.cols(), 10);
+  EXPECT_EQ(param_vals.cols(), 11);
   EXPECT_EQ(param_vals.rows(), 8000);
 
-  // Iterate over each set of results from the single pathfinders
+  // Parallel means we don't know order
+  bool is_all_lp = true;
+  bool is_any_lp = false;
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
-    EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1)));
+    is_all_lp &= std::isnan(param_vals.coeff(i, 1));
+    is_any_lp |= !std::isnan(param_vals.coeff(i, 1));
   }
+  EXPECT_FALSE(is_all_lp);
+  EXPECT_TRUE(is_any_lp);
 }
 
 TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
@@ -389,6 +384,7 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   constexpr int num_iterations = 220;
   constexpr bool save_iterations = false;
   constexpr int refresh = 0;
+  //
   constexpr bool calculate_lp = false;
   constexpr bool resample = true;
 
@@ -412,19 +408,20 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
-  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-                             parameter.eigen_states_[0].size());
-  for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
-    param_vals.row(i) = parameter.eigen_states_[i];
-  }
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
 
-  EXPECT_EQ(param_vals.cols(), 10);
+  EXPECT_EQ(param_vals.cols(), 11);
   EXPECT_EQ(param_vals.rows(), 8000);
+  bool is_all_lp = true;
+  bool is_any_lp = false;
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
-    EXPECT_TRUE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
+    is_all_lp &= std::isnan(param_vals.coeff(i, 1));
+    is_any_lp |= !std::isnan(param_vals.coeff(i, 1));
   }
+  EXPECT_FALSE(is_all_lp);
+  EXPECT_TRUE(is_any_lp);
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
@@ -470,18 +467,18 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals(parameter.eigen_states_.size(),
-                             parameter.eigen_states_[0].size());
-  for (Eigen::Index i = 0; i < parameter.eigen_states_.size(); ++i) {
-    param_vals.row(i) = parameter.eigen_states_[i];
-  }
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values().transpose();
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.cols(), 10);
+  EXPECT_EQ(param_vals.cols(), 11);
   EXPECT_EQ(param_vals.rows(), 8000);
-  // Iterate over each set of results from the single pathfinders
+  bool is_all_lp = true;
+  bool is_any_lp = false;
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
-    EXPECT_FALSE(std::isnan(param_vals.coeff(i, 1))) << "row: " << i;
+    is_all_lp &= std::isnan(param_vals.coeff(i, 1));
+    is_any_lp |= !std::isnan(param_vals.coeff(i, 1));
   }
+  EXPECT_FALSE(is_all_lp);
+  EXPECT_TRUE(is_any_lp);
 }

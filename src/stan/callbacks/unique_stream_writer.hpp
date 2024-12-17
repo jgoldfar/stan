@@ -113,7 +113,7 @@ class unique_stream_writer final : public writer {
       return;
     *output_ << comment_prefix_ << message << std::endl;
   }
-
+ using Stream = std::decay_t<Stream>;
  private:
   /**
    * Comma formatter for writing Eigen matrices
@@ -141,6 +141,7 @@ class unique_stream_writer final : public writer {
    */
   template <class T>
   void write_vector(const std::vector<T>& v) {
+    std::stringstream ss;
     if (output_ == nullptr)
       return;
     if (v.empty()) {
@@ -149,9 +150,10 @@ class unique_stream_writer final : public writer {
     auto last = v.end();
     --last;
     for (auto it = v.begin(); it != last; ++it) {
-      *output_ << *it << ",";
+      ss << *it << ",";
     }
-    *output_ << v.back() << std::endl;
+    ss << v.back() << std::endl;
+    *output_ << ss.str();
   }
 };
 

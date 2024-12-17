@@ -4,6 +4,7 @@
 #include <stan/callbacks/interrupt.hpp>
 #include <stan/callbacks/logger.hpp>
 #include <stan/callbacks/writer.hpp>
+#include <stan/callbacks/multi_stream_writer.hpp>
 #include <stan/io/var_context.hpp>
 #include <stan/optimization/bfgs.hpp>
 #include <stan/optimization/lbfgs_update.hpp>
@@ -46,7 +47,7 @@ namespace internal {
 template <bool DoAll = false, typename ConstrainFun, typename Model,
           typename ElboEst, typename RNG, typename ParamWriter>
 inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
-                                ElboEst&& elbo_est, const Eigen::Index path_num,
+                                ElboEst&& elbo_est, const Eigen::Index path_num, Eigen::Index base_idx,
                                 const Eigen::Index path_sample_idx, RNG&& rng,
                                 ParamWriter&& param_writer) {
   // FIX THESE
@@ -59,8 +60,9 @@ inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
   unconstrained_col = new_draws.col(path_sample_idx);
   constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
   const auto uc_param_size = approx_samples_constrained_col.size();
-  Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(uc_param_size + 2);
+  Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(uc_param_size + 3);
   sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
+  sample_row(2) = path_num;
   sample_row.tail(uc_param_size) = approx_samples_constrained_col;
   param_writer(sample_row);
   if constexpr (DoAll) {
@@ -162,6 +164,7 @@ inline int pathfinder_lbfgs_multi(
   std::vector<std::string> param_names;
   param_names.push_back("lp_approx__");
   param_names.push_back("lp__");
+  param_names.push_back("pathfinder__");
   model.constrained_param_names(param_names, true, true);
   parameter_writer(param_names);
   std::atomic<size_t> lp_calls{0};
@@ -179,29 +182,42 @@ inline int pathfinder_lbfgs_multi(
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
           for (int iter = r.begin(); iter < r.end(); ++iter) {
-            auto pathfinder_ret
-                = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
-                    model, *(init[iter]), random_seed, stride_id + iter,
-                    init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
-                    tol_grad, tol_rel_grad, tol_param, num_iterations,
-                    num_elbo_draws, num_draws, save_iterations, refresh,
-                    interrupt, logger, init_writers[iter],
-                    single_path_parameter_writer[iter],
-                    single_path_diagnostic_writer[iter], calculate_lp);
-            if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
-              logger.error(std::string("Pathfinder iteration: ")
-                           + std::to_string(iter) + " failed.");
-              return;
-            }
-            lp_calls += std::get<2>(pathfinder_ret);
             if (psis_resample && calculate_lp) {
+              auto pathfinder_ret
+                  = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
+                      model, *(init[iter]), random_seed, stride_id + iter,
+                      init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
+                      tol_grad, tol_rel_grad, tol_param, num_iterations,
+                      num_elbo_draws, num_draws, save_iterations, refresh,
+                      interrupt, logger, init_writers[iter],
+                      single_path_parameter_writer[iter],
+                      single_path_diagnostic_writer[iter], calculate_lp, psis_resample);
+              if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
+                logger.error(std::string("Pathfinder iteration: ")
+                            + std::to_string(iter) + " failed.");
+                return;
+              }
+              lp_calls += std::get<2>(pathfinder_ret);
               elbo_estimates.push_back(std::move(std::get<1>(pathfinder_ret)));
             } else {
-              stan::rng_t rng = util::create_rng(random_seed, stride_id + iter);
-              std::lock_guard<std::mutex> lock(write_mutex);
-              internal::gen_pathfinder_draw<true>(constrain_fun, model,
-                                                  std::get<1>(pathfinder_ret),
-                                                  0, 0, rng, parameter_writer);
+              // For no psis, have single write to both single and multi writers
+              stan::callbacks::multi_stream_writer<SingleParamWriter, ParamWriter> multi_param_writer(
+                  single_path_parameter_writer[iter], parameter_writer);
+              auto pathfinder_ret
+                  = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
+                      model, *(init[iter]), random_seed, stride_id + iter,
+                      init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
+                      tol_grad, tol_rel_grad, tol_param, num_iterations,
+                      num_elbo_draws, num_draws, save_iterations, refresh,
+                      interrupt, logger, init_writers[iter],
+                      multi_param_writer,
+                      single_path_diagnostic_writer[iter], calculate_lp, psis_resample);
+              if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
+                logger.error(std::string("Pathfinder iteration: ")
+                            + std::to_string(iter) + " failed.");
+                return;
+              }
+              lp_calls += std::get<2>(pathfinder_ret);
             }
           }
         });
@@ -242,7 +258,7 @@ inline int pathfinder_lbfgs_multi(
       Eigen::Index path_num = std::floor(draw_idx / num_draws);
       auto path_sample_idx = draw_idx % num_draws;
       auto&& elbo_est = elbo_estimates[path_num];
-      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est, path_num,
+      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est, path_num, path_num,
                                     path_sample_idx, rng, parameter_writer);
     }
     const auto end_psis_time = std::chrono::steady_clock::now();

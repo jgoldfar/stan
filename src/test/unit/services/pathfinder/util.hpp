@@ -145,7 +145,7 @@ class in_memory_writer : public stan::callbacks::stream_writer {
   tbb::concurrent_vector<Eigen::VectorXd> eigen_states_;
   tbb::concurrent_vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>>
       optim_path_;
-  Eigen::MatrixXd values_;
+  tbb::concurrent_vector<Eigen::MatrixXd> values_;
   in_memory_writer(std::ostream& stream)
       : stan::callbacks::stream_writer(stream) {}
 
@@ -176,13 +176,27 @@ class in_memory_writer : public stan::callbacks::stream_writer {
     optim_path_.push_back(xx);
   }
   template <typename EigVec, stan::require_eigen_vector_t<EigVec>* = nullptr>
-  void operator()(const EigVec& vals) {
-    eigen_states_.push_back(vals);
+  void operator()(EigVec&& vals) {
+    eigen_states_.push_back(std::forward<EigVec>(vals));
   }
   template <typename EigMat,
             stan::require_eigen_matrix_dynamic_t<EigMat>* = nullptr>
   void operator()(const EigMat& vals) {
-    values_ = vals;
+    values_.push_back(vals);
+  }
+  inline auto get_eigen_state_values() const {
+    Eigen::MatrixXd param_vals(eigen_states_.size(), eigen_states_[0].size());
+    for (size_t i = 0; i < eigen_states_.size(); ++i) {
+      param_vals.row(i) = eigen_states_[i];
+    }
+    return param_vals;
+  }
+  inline auto get_values() const {
+    Eigen::MatrixXd param_vals(values_[0].cols(), values_.size() * values_[0].rows());
+    for (size_t i = 0; i < values_.size(); ++i) {
+      param_vals.block(0, i * values_[i].rows(), values_[i].cols(), values_[i].rows()) = values_[i].transpose();
+    }
+    return param_vals;
   }
 };
 
@@ -495,12 +509,12 @@ Eigen::Matrix<double, 10, 100> eight_schools_r_answer() {
   return r_answer;
 }
 
-std::pair<Eigen::Matrix<double, 10, 1>, Eigen::Matrix<double, 10, 1>>
+std::pair<Eigen::Matrix<double, 1, 10>, Eigen::Matrix<double, 1, 10>>
 normal_glm_param_summary() {
-  Eigen::Matrix<double, 10, 1> mean_param_vals;
+  Eigen::Matrix<double, 1, 10> mean_param_vals;
   mean_param_vals << 20.1766, -7191.17, -3.99891, -2.00917, 0.00428024,
       0.990037, 2.98999, -1.02273, 1.01613, -0.994856;
-  Eigen::Matrix<double, 10, 1> sd_param_vals;
+  Eigen::Matrix<double, 1, 10> sd_param_vals;
   sd_param_vals << 1.83697, 1.85228, 0.0145116, 0.0145324, 0.0136457, 0.0137487,
       0.0144594, 0.0145803, 0.0102204, 0.0146323;
   return {mean_param_vals, sd_param_vals};
