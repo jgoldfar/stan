@@ -92,7 +92,7 @@ TEST_F(ServicesPathfinderGLM, single) {
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, save_iterations, refresh,
       callback, logger, init, parameter, diagnostics);
-   ASSERT_EQ(rc, 0);
+  ASSERT_EQ(rc, 0);
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
@@ -151,7 +151,6 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
   std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
   stan::test::test_logger logger(std::move(string_ostream));
 
-
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
   int rc = stan::services::pathfinder::pathfinder_lbfgs_single(
@@ -205,7 +204,8 @@ TEST_F(ServicesPathfinderGLM, multi) {
   using init_context_t = decltype(init_init_context());
   std::vector<std::unique_ptr<init_context_t>> single_path_inits;
   for (int i = 0; i < num_paths; ++i) {
-    single_path_inits.emplace_back(std::make_unique<init_context_t>(init_init_context()));
+    single_path_inits.emplace_back(
+        std::make_unique<init_context_t>(init_init_context()));
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(

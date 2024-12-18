@@ -19,7 +19,6 @@ struct mock_callback : public stan::callbacks::interrupt {
 
 template <typename T>
 class test_logger : public stan::callbacks::logger {
-
  public:
   std::unique_ptr<T> log_;
   test_logger(std::unique_ptr<T>&& x) : log_(std::move(x)) {}
