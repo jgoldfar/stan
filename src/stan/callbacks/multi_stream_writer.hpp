@@ -35,14 +35,10 @@ class multi_stream_writer {
    */
   template <typename T>
   void operator()(T&& x) {
-    stan::math::for_each([&](auto&& output) {
-      output(x);
-    }, output_);
+    stan::math::for_each([&](auto&& output) { output(x); }, output_);
   }
   void operator()() {
-    stan::math::for_each([](auto&& output) {
-      output();
-    }, output_);
+    stan::math::for_each([](auto&& output) { output(); }, output_);
   }
 
   /**
@@ -50,13 +46,11 @@ class multi_stream_writer {
    */
   inline auto& get_stream() noexcept { return output_; }
 
-
  private:
   /**
    * Output stream
    */
   std::tuple<std::reference_wrapper<Streams>...> output_;
-
 };
 
 }  // namespace callbacks
