@@ -1,5 +1,5 @@
-#ifndef STAN_CALLBACKS_MULTI_STREAM_WRITER_HPP
-#define STAN_CALLBACKS_MULTI_STREAM_WRITER_HPP
+#ifndef STAN_CALLBACKS_MULTI_WRITER_HPP
+#define STAN_CALLBACKS_MULTI_WRITER_HPP
 
 #include <stan/callbacks/writer.hpp>
 #include <stan/math/prim/fun/Eigen.hpp>
@@ -12,12 +12,12 @@ namespace stan {
 namespace callbacks {
 
 /**
- * `multi_stream_writer` is an layer on top of a writer class that
+ * `multi_writer` is an layer on top of a writer class that
  *  allows for multiple output streams to be written to.
  * @tparam Writers A parameter pack of types that inherit from `writer`
  */
 template <typename... Writers>
-class multi_stream_writer {
+class multi_writer {
  public:
   /**
    * Constructs a multi stream writer from a parameter pack of writers.
@@ -25,10 +25,10 @@ class multi_stream_writer {
    * @param[in, out] args A parameter pack of writers
    */
   template <typename... Args>
-  explicit multi_stream_writer(Args&&... args)
+  explicit multi_writer(Args&&... args)
       : output_(std::forward<Args>(args)...) {}
 
-  multi_stream_writer();
+  multi_writer();
   /**
    * @tparam T Any type accepted by a `writer` overload
    * @param[in] x A value to write to the output streams
@@ -55,7 +55,7 @@ class multi_stream_writer {
   /**
    * Output stream
    */
-  std::tuple<std::reference_wrapper<Streams>...> output_;
+  std::tuple<std::reference_wrapper<Writers>...> output_;
 
 };
 

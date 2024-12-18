@@ -4,7 +4,7 @@
 #include <stan/callbacks/interrupt.hpp>
 #include <stan/callbacks/logger.hpp>
 #include <stan/callbacks/writer.hpp>
-#include <stan/callbacks/multi_stream_writer.hpp>
+#include <stan/callbacks/multi_writer.hpp>
 #include <stan/io/var_context.hpp>
 #include <stan/optimization/bfgs.hpp>
 #include <stan/optimization/lbfgs_update.hpp>
@@ -25,58 +25,6 @@ namespace services {
 namespace pathfinder {
 
 namespace internal {
-/**
- * Generate a single draw from the pathfinder algorithm.
- * @tparam DoAll If true, generate all draws. If false, generate only the
- * draw at `path_sample_idx`.
- * @tparam ConstrainFun A functor with a valid `operator(EigVector, EigVector,
- * Model, RNG)`
- * @tparam Model A model implementation
- * @tparam ElboEst A struct with the ELBO estimate
- * @tparam RNG A random number generator
- * @tparam ParamWriter A writer callback for parameter values
- * @param[in] constrain_fun A functor to transform parameters to the constrained
- * space
- * @param[in] model A model implementation
- * @param[in] elbo_est A struct with the ELBO estimate
- * @param[in] path_num The path number
- * @param[in] path_sample_idx The index of the sample to generate
- * @param[in] rng A random number generator
- * @param[in] param_writer A writer callback for parameter values
- */
-template <bool DoAll = false, typename ConstrainFun, typename Model,
-          typename ElboEst, typename RNG, typename ParamWriter>
-inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
-                                ElboEst&& elbo_est, const Eigen::Index path_num,
-                                Eigen::Index base_idx,
-                                const Eigen::Index path_sample_idx, RNG&& rng,
-                                ParamWriter&& param_writer) {
-  // FIX THESE
-  auto&& lp_draws = elbo_est.lp_mat;
-  auto&& new_draws = elbo_est.repeat_draws;
-  const Eigen::Index param_size = new_draws.rows();
-  const auto num_samples = new_draws.cols();
-  Eigen::VectorXd unconstrained_col;
-  Eigen::VectorXd approx_samples_constrained_col;
-  unconstrained_col = new_draws.col(path_sample_idx);
-  constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
-  const auto uc_param_size = approx_samples_constrained_col.size();
-  Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(uc_param_size + 3);
-  sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-  sample_row(2) = path_num;
-  sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-  param_writer(sample_row);
-  if constexpr (DoAll) {
-    for (int i = 1; i < num_samples; ++i) {
-      unconstrained_col = new_draws.col(i);
-      constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
-                    rng);
-      sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-      sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-      param_writer(sample_row);
-    }
-  }
-}
 
 template <typename Writer>
 struct concurrent_writer {
@@ -220,11 +168,11 @@ inline int pathfinder_lbfgs_multi(
               elbo_estimates.push_back(std::move(std::get<1>(pathfinder_ret)));
             } else {
               // For no psis, have single write to both single and multi writers
-              using multi_writer = stan::callbacks::multi_stream_writer<
+              using multi_writer_t = stan::callbacks::multi_writer<
                   SingleParamWriter, internal::concurrent_writer<ParamWriter>>;
               internal::concurrent_writer safe_write{write_mutex,
                                                      parameter_writer};
-              multi_writer multi_param_writer(
+              multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
                   = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
@@ -276,15 +224,26 @@ inline int pathfinder_lbfgs_multi(
                      boost::iterator_range<double*>(
                          weight_vals.data(),
                          weight_vals.data() + weight_vals.size())));
+    Eigen::VectorXd unconstrained_col;
+    Eigen::VectorXd approx_samples_constrained_col;
+    const auto uc_param_size = param_names.size() - 3;
+    Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
     for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
       auto draw_idx = rand_psis_idx();
       // Calculate which pathfinder the draw came from
       Eigen::Index path_num = std::floor(draw_idx / num_draws);
       auto path_sample_idx = draw_idx % num_draws;
       auto&& elbo_est = elbo_estimates[path_num];
-      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est, path_num,
-                                    path_num, path_sample_idx, rng,
-                                    parameter_writer);
+      auto&& lp_draws = elbo_est.lp_mat;
+      auto&& new_draws = elbo_est.repeat_draws;
+      const Eigen::Index param_size = new_draws.rows();
+      const auto num_samples = new_draws.cols();
+      unconstrained_col = new_draws.col(path_sample_idx);
+      constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
+      sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
+      sample_row(2) = path_num;
+      sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+      parameter_writer(sample_row);
     }
     const auto end_psis_time = std::chrono::steady_clock::now();
     psis_delta_time

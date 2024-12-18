@@ -821,7 +821,7 @@ inline auto pathfinder_lbfgs_single(
         logger.info(lbfgs_ss);
         lbfgs_ss.str("");
       }
-      if (ReturnLpSamples) {
+      if constexpr (ReturnLpSamples) {
         // we want to terminate multi-path pathfinder during these unrecoverable
         // exceptions
         throw;
