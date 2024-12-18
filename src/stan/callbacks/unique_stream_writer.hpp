@@ -113,6 +113,7 @@ class unique_stream_writer final : public writer {
       return;
     *output_ << comment_prefix_ << message << std::endl;
   }
+
  private:
   /**
    * Comma formatter for writing Eigen matrices
