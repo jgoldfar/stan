@@ -51,7 +51,6 @@ class multi_writer {
    * Output stream
    */
   std::tuple<std::reference_wrapper<Writers>...> output_;
-
 };
 
 }  // namespace callbacks

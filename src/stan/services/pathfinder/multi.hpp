@@ -239,7 +239,8 @@ inline int pathfinder_lbfgs_multi(
       const Eigen::Index param_size = new_draws.rows();
       const auto num_samples = new_draws.cols();
       unconstrained_col = new_draws.col(path_sample_idx);
-      constrain_fun(approx_samples_constrained_col, unconstrained_col, model, rng);
+      constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
+                    rng);
       sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
       sample_row(2) = path_num;
       sample_row.tail(uc_param_size) = approx_samples_constrained_col;
