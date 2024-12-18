@@ -12,24 +12,17 @@ namespace stan {
 namespace callbacks {
 
 /**
- * `multi_stream_writer` is an implementation
- * of `writer` that holds a unique pointer to the stream it is
- * writing to.
- * @tparam Stream A type with with a valid `operator<<(std::string)`
- * @tparam Deleter A class with a valid `operator()` method for deleting the
- * output stream
+ * `multi_stream_writer` is an layer on top of a writer class that
+ *  allows for multiple output streams to be written to.
+ * @tparam Writers A parameter pack of types that inherit from `writer`
  */
-template <typename... Streams>
+template <typename... Writers>
 class multi_stream_writer {
  public:
   /**
-   * Constructs a multi stream writer with an output stream
-   * and an optional prefix for comments.
+   * Constructs a multi stream writer from a parameter pack of writers.
    *
-   * @param[in, out] output A unique pointer to a type inheriting from
-   * `std::ostream`
-   * @param[in] comment_prefix string to stream before each comment line.
-   *  Default is "".
+   * @param[in, out] args A parameter pack of writers
    */
   template <typename... Args>
   explicit multi_stream_writer(Args&&... args)
@@ -37,19 +30,19 @@ class multi_stream_writer {
 
   multi_stream_writer();
   /**
-   * Writes a set of names on a single line in csv format followed
-   * by a newline.
-   *
-   * Note: the names are not escaped.
-   *
-   * @param[in] names Names in a std::vector
+   * @tparam T Any type accepted by a `writer` overload
+   * @param[in] x A value to write to the output streams
    */
   template <typename T>
   void operator()(T&& x) {
-    stan::math::for_each([&](auto&& output) { output(x); }, output_);
+    stan::math::for_each([&](auto&& output) {
+      output(x);
+    }, output_);
   }
   void operator()() {
-    stan::math::for_each([](auto&& output) { output(); }, output_);
+    stan::math::for_each([](auto&& output) {
+      output();
+    }, output_);
   }
 
   /**
@@ -57,11 +50,13 @@ class multi_stream_writer {
    */
   inline auto& get_stream() noexcept { return output_; }
 
+
  private:
   /**
    * Output stream
    */
   std::tuple<std::reference_wrapper<Streams>...> output_;
+
 };
 
 }  // namespace callbacks
