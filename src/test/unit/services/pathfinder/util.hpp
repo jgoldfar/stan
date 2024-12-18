@@ -17,12 +17,13 @@ struct mock_callback : public stan::callbacks::interrupt {
   void operator()() { n++; }
 };
 
+template <typename T>
 class test_logger : public stan::callbacks::logger {
-  std::unique_ptr<std::ostream> log_;
 
  public:
-  test_logger(std::unique_ptr<std::ostream>&& x) : log_(std::move(x)) {}
-  test_logger() : log_(std::unique_ptr<std::ostream>(nullptr)) {}
+  std::unique_ptr<T> log_;
+  test_logger(std::unique_ptr<T>&& x) : log_(std::move(x)) {}
+  test_logger() : log_(std::unique_ptr<T>(nullptr)) {}
   /**
    * Logs a message with debug log level
    *

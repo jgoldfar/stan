@@ -53,14 +53,13 @@ class ServicesPathfinderGLM : public testing::Test {
   stan_model model;
 };
 constexpr std::array param_indices{0, 1, 3, 4, 5, 6, 7, 8, 9, 10};
-stan::io::array_var_context init_init_context() {
-  std::vector<std::string> names_r{"b", "Intercept", "sigma"};
-  std::vector<double> values_r{0, 0, 0, 0, 0, 0, 1};
+inline stan::io::array_var_context init_init_context() {
+  std::vector<std::string> names_r{};
+  std::vector<double> values_r{};
   using size_vec = std::vector<size_t>;
-  std::vector<size_vec> dims_r{size_vec{5}, size_vec{}, size_vec{}};
+  std::vector<size_vec> dims_r{};
   std::vector<std::string> names_i{""};
   std::vector<int> values_i{};
-  using size_vec = std::vector<size_t>;
   std::vector<size_vec> dims_i{size_vec{}};
   return stan::io::array_var_context(names_r, values_r, dims_r);
 }
@@ -68,23 +67,23 @@ stan::io::array_var_context init_init_context() {
 TEST_F(ServicesPathfinderGLM, single) {
   constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 2;
+  constexpr double init_radius = 0.5;
   constexpr double num_elbo_draws = 80;
   constexpr double num_draws = 500;
   constexpr int history_size = 35;
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 400;
   constexpr bool save_iterations = true;
   constexpr int refresh = 1;
   stan::test::mock_callback callback;
   stan::io::array_var_context init_context = init_init_context();
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
 
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
@@ -93,8 +92,7 @@ TEST_F(ServicesPathfinderGLM, single) {
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, save_iterations, refresh,
       callback, logger, init, parameter, diagnostics);
-  ASSERT_EQ(rc, 0);
-
+   ASSERT_EQ(rc, 0);
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
@@ -133,15 +131,15 @@ TEST_F(ServicesPathfinderGLM, single) {
 TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
   constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 2;
+  constexpr double init_radius = 0.5;
   constexpr double num_elbo_draws = 80;
   constexpr double num_draws = 500;
   constexpr int history_size = 35;
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 400;
   constexpr bool save_iterations = true;
@@ -150,8 +148,9 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
 
   stan::test::mock_callback callback;
   stan::io::array_var_context init_context = init_init_context();
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
+
 
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
@@ -178,10 +177,10 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
 }
 
 TEST_F(ServicesPathfinderGLM, multi) {
-  constexpr unsigned int seed = 0;
+  constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 1;
-  constexpr double num_multi_draws = 100;
+  constexpr double init_radius = 0.5;
+  constexpr double num_multi_draws = 1000;
   constexpr int num_paths = 4;
   constexpr double num_elbo_draws = 1000;
   constexpr double num_draws = 2000;
@@ -189,22 +188,24 @@ TEST_F(ServicesPathfinderGLM, multi) {
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 220;
   constexpr bool save_iterations = false;
   constexpr int refresh = 0;
+  constexpr int calculate_lp = true;
+  constexpr int resample = true;
 
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
   std::vector<stan::callbacks::writer> single_path_parameter_writer(num_paths);
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
-  std::vector<std::unique_ptr<decltype(init_init_context())>> single_path_inits;
+  using init_context_t = decltype(init_init_context());
+  std::vector<std::unique_ptr<init_context_t>> single_path_inits;
   for (int i = 0; i < num_paths; ++i) {
-    single_path_inits.emplace_back(
-        std::make_unique<decltype(init_init_context())>(init_init_context()));
+    single_path_inits.emplace_back(std::make_unique<init_context_t>(init_init_context()));
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(
@@ -214,19 +215,18 @@ TEST_F(ServicesPathfinderGLM, multi) {
       save_iterations, refresh, callback, logger,
       std::vector<stan::callbacks::stream_writer>(num_paths, init),
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
-      diagnostics);
+      diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   EXPECT_EQ(11, param_vals.cols());
-  EXPECT_EQ(100, param_vals.rows());
+  EXPECT_EQ(1000, param_vals.rows());
   // They can be in any order and any number
   for (Eigen::Index i = 0; i < num_multi_draws; i++) {
     EXPECT_GE(param_vals.col(2)(i), 0);
     EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
   }
-
   auto param_tmp = param_vals(Eigen::all, param_indices);
   auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);
   auto&& mean_vals = mean_sd_pair.first;
@@ -249,14 +249,14 @@ TEST_F(ServicesPathfinderGLM, multi) {
     EXPECT_NEAR(0, all_mean_vals(2, i), .01);
   }
   for (int i = 2; i < all_mean_vals.cols(); ++i) {
-    EXPECT_NEAR(0, all_sd_vals(2, i), .1);
+    EXPECT_NEAR(0, all_sd_vals(2, i), 1e-2);
   }
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample) {
-  constexpr unsigned int seed = 0;
+  constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 1;
+  constexpr double init_radius = 0.5;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
   constexpr double num_elbo_draws = 1000;
@@ -266,8 +266,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 220;
   constexpr bool save_iterations = false;
@@ -275,8 +275,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
   constexpr bool calculate_lp = true;
   constexpr bool resample = false;
 
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
   std::vector<stan::callbacks::writer> single_path_parameter_writer(num_paths);
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
@@ -295,7 +295,6 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
-
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
@@ -308,9 +307,9 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
-  constexpr unsigned int seed = 0;
+  constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 1;
+  constexpr double init_radius = 0.5;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
   constexpr double num_elbo_draws = 10;
@@ -320,8 +319,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 220;
   constexpr bool save_iterations = false;
@@ -329,8 +328,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   constexpr bool calculate_lp = false;
   constexpr bool resample = false;
 
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
   std::vector<stan::callbacks::writer> single_path_parameter_writer(num_paths);
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
@@ -349,7 +348,6 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
-
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
@@ -373,9 +371,9 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
 }
 
 TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
-  constexpr unsigned int seed = 0;
+  constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 1;
+  constexpr double init_radius = 0.5;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
   constexpr double num_elbo_draws = 1000;
@@ -385,8 +383,8 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 220;
   constexpr bool save_iterations = false;
@@ -395,8 +393,8 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   constexpr bool calculate_lp = false;
   constexpr bool resample = true;
 
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
   std::vector<stan::callbacks::writer> single_path_parameter_writer(num_paths);
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
@@ -436,9 +434,9 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
-  constexpr unsigned int seed = 0;
+  constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
-  constexpr double init_radius = 1;
+  constexpr double init_radius = 0.5;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
   constexpr double num_elbo_draws = 1000;
@@ -448,8 +446,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   constexpr double init_alpha = 1;
   constexpr double tol_obj = 0;
   constexpr double tol_rel_obj = 0;
-  constexpr double tol_grad = 0;
-  constexpr double tol_rel_grad = 0;
+  constexpr double tol_grad = 2e-4;
+  constexpr double tol_rel_grad = 2e-6;
   constexpr double tol_param = 0;
   constexpr int num_iterations = 220;
   constexpr bool save_iterations = false;
@@ -457,8 +455,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   constexpr bool calculate_lp = true;
   constexpr bool resample = false;
 
-  std::unique_ptr<std::ostream> empty_ostream(nullptr);
-  stan::test::test_logger logger(std::move(empty_ostream));
+  std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
+  stan::test::test_logger logger(std::move(string_ostream));
   std::vector<stan::callbacks::writer> single_path_parameter_writer(num_paths);
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
@@ -477,7 +475,6 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
-
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   EXPECT_EQ(param_vals.cols(), 11);
   EXPECT_EQ(param_vals.rows(),

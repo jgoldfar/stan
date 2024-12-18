@@ -611,12 +611,12 @@ inline auto pathfinder_lbfgs_single(
   stan::rng_t rng = util::create_rng(random_seed, stride_id);
   std::vector<int> disc_vector;
   std::vector<double> cont_vector;
-
+  const std::string path_num("Path [" + std::to_string(stride_id) + "] :");
   try {
     cont_vector = util::initialize<false>(model, init, rng, init_radius, false,
                                           logger, init_writer);
   } catch (const std::exception& e) {
-    logger.error(e.what());
+    logger.error(path_num + e.what());
     return internal::ret_pathfinder<ReturnLpSamples>(error_codes::SOFTWARE,
                                                      internal::elbo_est_t{}, 0);
   }
@@ -641,17 +641,10 @@ inline auto pathfinder_lbfgs_single(
                                            Eigen::Dynamic, true>;
   Optimizer lbfgs(model, cont_vector, disc_vector, std::move(ls_opts),
                   std::move(conv_opts), std::move(lbfgs_update), &lbfgs_ss);
-  const std::string path_num("Path [" + std::to_string(stride_id) + "] :");
   if (refresh != 0) {
     logger.info(path_num + "Initial log joint density = "
                 + std::to_string(lbfgs.logp()));
   }
-  std::vector<std::string> names;
-  names.push_back("lp_approx__");
-  names.push_back("lp__");
-  names.push_back("pathfinder__");
-  model.constrained_param_names(names, true, true);
-  parameter_writer(names);
   int ret = 0;
   boost::circular_buffer<Eigen::VectorXd> param_buff(max_history_size);
   boost::circular_buffer<Eigen::VectorXd> grad_buff(max_history_size);
@@ -699,7 +692,6 @@ inline auto pathfinder_lbfgs_single(
       msg.str("");
     }
   };
-
   while (ret == 0) {
     std::stringstream msg;
     interrupt();
@@ -864,6 +856,12 @@ inline auto pathfinder_lbfgs_single(
                   + " evaluations: (" + std::to_string(num_evals) + ")");
     }
   }
+  std::vector<std::string> names;
+  names.push_back("lp_approx__");
+  names.push_back("lp__");
+  names.push_back("pathfinder__");
+  model.constrained_param_names(names, true, true);
+  parameter_writer(names);
   if (ReturnLpSamples && psis_resample && calculate_lp) {
     internal::elbo_est_t est_draws = internal::est_approx_draws<false>(
         lp_fun, constrain_fun, rng, taylor_approx_best, num_draws,
