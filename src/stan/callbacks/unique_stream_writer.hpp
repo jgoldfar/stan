@@ -113,7 +113,8 @@ class unique_stream_writer final : public writer {
       return;
     *output_ << comment_prefix_ << message << std::endl;
   }
- using Stream = std::decay_t<Stream>;
+  using Stream = std::decay_t<Stream>;
+
  private:
   /**
    * Comma formatter for writing Eigen matrices

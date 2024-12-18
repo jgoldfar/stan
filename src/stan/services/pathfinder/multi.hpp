@@ -47,7 +47,8 @@ namespace internal {
 template <bool DoAll = false, typename ConstrainFun, typename Model,
           typename ElboEst, typename RNG, typename ParamWriter>
 inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
-                                ElboEst&& elbo_est, const Eigen::Index path_num, Eigen::Index base_idx,
+                                ElboEst&& elbo_est, const Eigen::Index path_num,
+                                Eigen::Index base_idx,
                                 const Eigen::Index path_sample_idx, RNG&& rng,
                                 ParamWriter&& param_writer) {
   // FIX THESE
@@ -81,8 +82,8 @@ template <typename Writer>
 struct concurrent_writer {
   std::reference_wrapper<Writer> writer;
   std::reference_wrapper<std::mutex> mut_;
-  explicit concurrent_writer(std::mutex& mut, Writer& writer) :
-    writer(writer), mut_(mut) {}
+  explicit concurrent_writer(std::mutex& mut, Writer& writer)
+      : writer(writer), mut_(mut) {}
   template <typename T>
   void operator()(T&& t) {
     std::lock_guard<std::mutex> lock(mut_.get());
@@ -203,37 +204,41 @@ inline int pathfinder_lbfgs_multi(
               auto pathfinder_ret
                   = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
-                      init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
-                      tol_grad, tol_rel_grad, tol_param, num_iterations,
-                      num_elbo_draws, num_draws, save_iterations, refresh,
-                      interrupt, logger, init_writers[iter],
-                      single_path_parameter_writer[iter],
-                      single_path_diagnostic_writer[iter], calculate_lp, psis_resample);
+                      init_radius, history_size, init_alpha, tol_obj,
+                      tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+                      num_iterations, num_elbo_draws, num_draws,
+                      save_iterations, refresh, interrupt, logger,
+                      init_writers[iter], single_path_parameter_writer[iter],
+                      single_path_diagnostic_writer[iter], calculate_lp,
+                      psis_resample);
               if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
                 logger.error(std::string("Pathfinder iteration: ")
-                            + std::to_string(iter) + " failed.");
+                             + std::to_string(iter) + " failed.");
                 return;
               }
               lp_calls += std::get<2>(pathfinder_ret);
               elbo_estimates.push_back(std::move(std::get<1>(pathfinder_ret)));
             } else {
               // For no psis, have single write to both single and multi writers
-              using multi_writer = stan::callbacks::multi_stream_writer<SingleParamWriter, internal::concurrent_writer<ParamWriter>>;
-              internal::concurrent_writer safe_write{write_mutex, parameter_writer};
+              using multi_writer = stan::callbacks::multi_stream_writer<
+                  SingleParamWriter, internal::concurrent_writer<ParamWriter>>;
+              internal::concurrent_writer safe_write{write_mutex,
+                                                     parameter_writer};
               multi_writer multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
                   = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
-                      init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
-                      tol_grad, tol_rel_grad, tol_param, num_iterations,
-                      num_elbo_draws, num_draws, save_iterations, refresh,
-                      interrupt, logger, init_writers[iter],
-                      multi_param_writer,
-                      single_path_diagnostic_writer[iter], calculate_lp, psis_resample);
+                      init_radius, history_size, init_alpha, tol_obj,
+                      tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+                      num_iterations, num_elbo_draws, num_draws,
+                      save_iterations, refresh, interrupt, logger,
+                      init_writers[iter], multi_param_writer,
+                      single_path_diagnostic_writer[iter], calculate_lp,
+                      psis_resample);
               if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
                 logger.error(std::string("Pathfinder iteration: ")
-                            + std::to_string(iter) + " failed.");
+                             + std::to_string(iter) + " failed.");
                 return;
               }
               lp_calls += std::get<2>(pathfinder_ret);
@@ -277,8 +282,9 @@ inline int pathfinder_lbfgs_multi(
       Eigen::Index path_num = std::floor(draw_idx / num_draws);
       auto path_sample_idx = draw_idx % num_draws;
       auto&& elbo_est = elbo_estimates[path_num];
-      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est, path_num, path_num,
-                                    path_sample_idx, rng, parameter_writer);
+      internal::gen_pathfinder_draw(constrain_fun, model, elbo_est, path_num,
+                                    path_num, path_sample_idx, rng,
+                                    parameter_writer);
     }
     const auto end_psis_time = std::chrono::steady_clock::now();
     psis_delta_time

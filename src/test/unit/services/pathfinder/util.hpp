@@ -192,9 +192,12 @@ class in_memory_writer : public stan::callbacks::stream_writer {
     return param_vals;
   }
   inline auto get_values() const {
-    Eigen::MatrixXd param_vals(values_[0].cols(), values_.size() * values_[0].rows());
+    Eigen::MatrixXd param_vals(values_[0].cols(),
+                               values_.size() * values_[0].rows());
     for (size_t i = 0; i < values_.size(); ++i) {
-      param_vals.block(0, i * values_[i].rows(), values_[i].cols(), values_[i].rows()) = values_[i].transpose();
+      param_vals.block(0, i * values_[i].rows(), values_[i].cols(),
+                       values_[i].rows())
+          = values_[i].transpose();
     }
     return param_vals;
   }
@@ -524,14 +527,15 @@ template <typename T1>
 inline auto get_mean_sd(T1&& param_vals) {
   Eigen::RowVectorXd mean_vals = param_vals.colwise().mean().eval();
   Eigen::RowVectorXd sd_vals = (((param_vals.rowwise() - mean_vals)
-                                    .array()
-                                    .square()
-                                    .matrix()
-                                    .colwise()
-                                    .sum()
-                                    .array()
-                                / (param_vals.rows() - 1))
-                                   .sqrt()).eval();
+                                     .array()
+                                     .square()
+                                     .matrix()
+                                     .colwise()
+                                     .sum()
+                                     .array()
+                                 / (param_vals.rows() - 1))
+                                    .sqrt())
+                                   .eval();
   return std::make_pair(mean_vals, sd_vals);
 }
 }  // namespace test

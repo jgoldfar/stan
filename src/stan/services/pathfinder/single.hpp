@@ -871,7 +871,8 @@ inline auto pathfinder_lbfgs_single(
     return internal::ret_pathfinder<ReturnLpSamples>(
         error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls);
   } else {
-    Eigen::Matrix<double, 1, Eigen::Dynamic> constrained_draws_vec(names.size());
+    Eigen::Matrix<double, 1, Eigen::Dynamic> constrained_draws_vec(
+        names.size());
     constrained_draws_vec(2) = stride_id - (ReturnLpSamples ? 1 : 0);
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratio;
     auto&& elbo_draws = elbo_best.repeat_draws;

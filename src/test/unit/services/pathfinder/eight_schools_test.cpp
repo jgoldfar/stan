@@ -58,8 +58,8 @@ class ServicesPathfinderEightSchools : public testing::Test {
   stan_model model;
 };
 
-constexpr std::array param_indices{0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-                                   14, 15, 16, 17, 18, 19, 20};
+constexpr std::array param_indices{0,  1,  3,  4,  5,  6,  7,  8,  9,  10,
+                                   11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
 
 auto init_init_context() { return stan::io::empty_var_context(); }
 
@@ -237,7 +237,8 @@ TEST_F(ServicesPathfinderEightSchools, single) {
       r_constrainted_draws_mat.col(i) = constrained_draws2;
     }
   }
-  Eigen::RowVectorXd mean_r_vals = r_constrainted_draws_mat.rowwise().mean().transpose();
+  Eigen::RowVectorXd mean_r_vals
+      = r_constrainted_draws_mat.rowwise().mean().transpose();
   Eigen::RowVectorXd sd_r_vals
       = (((r_constrainted_draws_mat.colwise() - mean_r_vals.transpose())
               .array()

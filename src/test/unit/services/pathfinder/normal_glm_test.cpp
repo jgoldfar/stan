@@ -89,10 +89,10 @@ TEST_F(ServicesPathfinderGLM, single) {
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
   int rc = stan::services::pathfinder::pathfinder_lbfgs_single(
-      model, init_context, seed, stride_id, init_radius, history_size, init_alpha,
-      tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param, num_iterations,
-      num_elbo_draws, num_draws, save_iterations, refresh, callback, logger,
-      init, parameter, diagnostics);
+      model, init_context, seed, stride_id, init_radius, history_size,
+      init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+      num_iterations, num_elbo_draws, num_draws, save_iterations, refresh,
+      callback, logger, init, parameter, diagnostics);
   ASSERT_EQ(rc, 0);
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
@@ -156,10 +156,10 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
   int rc = stan::services::pathfinder::pathfinder_lbfgs_single(
-      model, init_context, seed, stride_id, init_radius, history_size, init_alpha,
-      tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param, num_iterations,
-      num_elbo_draws, num_draws, save_iterations, refresh, callback, logger,
-      init, parameter, diagnostics, calculate_lp);
+      model, init_context, seed, stride_id, init_radius, history_size,
+      init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+      num_iterations, num_elbo_draws, num_draws, save_iterations, refresh,
+      callback, logger, init, parameter, diagnostics, calculate_lp);
   ASSERT_EQ(rc, 0);
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   EXPECT_EQ(11, param_vals.cols());
@@ -354,7 +354,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
   EXPECT_EQ(param_vals.cols(), 11);
-  EXPECT_EQ(param_vals.rows(), 8000);  // They can be in any order and any number
+  EXPECT_EQ(param_vals.rows(),
+            8000);  // They can be in any order and any number
   for (Eigen::Index i = 0; i < num_multi_draws; i++) {
     EXPECT_GE(param_vals.col(2)(i), 0);
     EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
@@ -479,7 +480,8 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
 
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   EXPECT_EQ(param_vals.cols(), 11);
-  EXPECT_EQ(param_vals.rows(), 8000);  // They can be in any order and any number
+  EXPECT_EQ(param_vals.rows(),
+            8000);  // They can be in any order and any number
   for (Eigen::Index i = 0; i < num_paths * num_draws; i++) {
     EXPECT_GE(param_vals.col(2)(i), 0);
     EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
