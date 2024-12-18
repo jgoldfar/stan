@@ -67,7 +67,7 @@ stan::io::array_var_context init_init_context() {
 
 TEST_F(ServicesPathfinderGLM, single) {
   constexpr unsigned int seed = 3;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 2;
   constexpr double num_elbo_draws = 80;
   constexpr double num_draws = 500;
@@ -81,7 +81,6 @@ TEST_F(ServicesPathfinderGLM, single) {
   constexpr int num_iterations = 400;
   constexpr bool save_iterations = true;
   constexpr int refresh = 1;
-
   stan::test::mock_callback callback;
   stan::io::array_var_context init_context = init_init_context();
   std::unique_ptr<std::ostream> empty_ostream(nullptr);
@@ -90,28 +89,23 @@ TEST_F(ServicesPathfinderGLM, single) {
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
   int rc = stan::services::pathfinder::pathfinder_lbfgs_single(
-      model, init_context, seed, chain, init_radius, history_size, init_alpha,
+      model, init_context, seed, stride_id, init_radius, history_size, init_alpha,
       tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param, num_iterations,
       num_elbo_draws, num_draws, save_iterations, refresh, callback, logger,
       init, parameter, diagnostics);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
+  for (auto&& x_i : param_vals.col(2)) {
+    EXPECT_EQ(x_i, stride_id);
+  }
 
-  Eigen::RowVectorXd mean_vals = param_vals.colwise().mean().eval()(param_indices);
-  Eigen::RowVectorXd sd_vals = ((((param_vals(Eigen::all, param_indices).rowwise() - mean_vals)
-                                  .array()
-                                  .square()
-                                  .matrix()
-                                  .rowwise()
-                                  .sum()
-                                  .array()
-                              / (param_vals.rows() - 1))
-                                 .sqrt())
-                                .transpose()
-                                .eval());
+  auto param_tmp = param_vals(Eigen::all, param_indices);
+  auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);
+  auto&& mean_vals = mean_sd_pair.first;
+  auto&& sd_vals = mean_sd_pair.second;
   auto prev_param_summary = stan::test::normal_glm_param_summary();
   Eigen::Matrix<double, 1, 10> prev_mean_vals = prev_param_summary.first;
   Eigen::Matrix<double, 1, 10> prev_sd_vals = prev_param_summary.second;
@@ -121,7 +115,7 @@ TEST_F(ServicesPathfinderGLM, single) {
   all_mean_vals.row(0) = mean_vals;
   all_mean_vals.row(1) = prev_mean_vals;
   all_mean_vals.row(2) = ans_mean_diff;
-  Eigen::MatrixXd all_sd_vals(3, 1);
+  Eigen::MatrixXd all_sd_vals(3, 10);
   all_sd_vals.row(0) = sd_vals;
   all_sd_vals.row(1) = prev_sd_vals;
   all_sd_vals.row(2) = ans_sd_diff;
@@ -138,7 +132,7 @@ TEST_F(ServicesPathfinderGLM, single) {
 
 TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
   constexpr unsigned int seed = 3;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 2;
   constexpr double num_elbo_draws = 80;
   constexpr double num_draws = 500;
@@ -162,12 +156,17 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
   std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd>> input_iters;
 
   int rc = stan::services::pathfinder::pathfinder_lbfgs_single(
-      model, init_context, seed, chain, init_radius, history_size, init_alpha,
+      model, init_context, seed, stride_id, init_radius, history_size, init_alpha,
       tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param, num_iterations,
       num_elbo_draws, num_draws, save_iterations, refresh, callback, logger,
       init, parameter, diagnostics, calculate_lp);
   ASSERT_EQ(rc, 0);
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
+  EXPECT_EQ(11, param_vals.cols());
+  EXPECT_EQ(500, param_vals.rows());
+  for (auto&& x_i : param_vals.col(2)) {
+    EXPECT_EQ(x_i, stride_id);
+  }
   for (Eigen::Index i = 0; i < num_elbo_draws; ++i) {
     EXPECT_FALSE(std::isnan(param_vals.coeff(num_draws + i, 1)))
         << "row: " << (num_draws + i);
@@ -180,7 +179,7 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
 
 TEST_F(ServicesPathfinderGLM, multi) {
   constexpr unsigned int seed = 0;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 1;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
@@ -209,7 +208,7 @@ TEST_F(ServicesPathfinderGLM, multi) {
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(
-      model, single_path_inits, seed, chain, init_radius, history_size,
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
       save_iterations, refresh, callback, logger,
@@ -217,23 +216,21 @@ TEST_F(ServicesPathfinderGLM, multi) {
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics);
   ASSERT_EQ(rc, 0);
-
-  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
+  EXPECT_EQ(11, param_vals.cols());
+  EXPECT_EQ(100, param_vals.rows());
+  // They can be in any order and any number
+  for (Eigen::Index i = 0; i < num_multi_draws; i++) {
+    EXPECT_GE(param_vals.col(2)(i), 0);
+    EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+  }
 
-  Eigen::RowVectorXd mean_vals = param_vals.colwise().mean().eval()(param_indices);
-  Eigen::RowVectorXd sd_vals = ((((param_vals(Eigen::all, param_indices).rowwise() - mean_vals)
-                                  .array()
-                                  .square()
-                                  .matrix()
-                                  .rowwise()
-                                  .sum()
-                                  .array()
-                              / (param_vals.rows() - 1))
-                                 .sqrt())
-                                .transpose()
-                                .eval());
+  auto param_tmp = param_vals(Eigen::all, param_indices);
+  auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);
+  auto&& mean_vals = mean_sd_pair.first;
+  auto&& sd_vals = mean_sd_pair.second;
   auto prev_param_summary = stan::test::normal_glm_param_summary();
   Eigen::Matrix<double, 1, 10> prev_mean_vals = prev_param_summary.first;
   Eigen::Matrix<double, 1, 10> prev_sd_vals = prev_param_summary.second;
@@ -258,7 +255,7 @@ TEST_F(ServicesPathfinderGLM, multi) {
 
 TEST_F(ServicesPathfinderGLM, multi_noresample) {
   constexpr unsigned int seed = 0;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 1;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
@@ -290,7 +287,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(
-      model, single_path_inits, seed, chain, init_radius, history_size,
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
       save_iterations, refresh, callback, logger,
@@ -301,13 +298,18 @@ TEST_F(ServicesPathfinderGLM, multi_noresample) {
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(11, parameter.eigen_states_[0].size());
-  EXPECT_EQ(8000, parameter.eigen_states_.size());
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
+  EXPECT_EQ(11, param_vals.cols());
+  EXPECT_EQ(8000, param_vals.rows());
+  for (Eigen::Index i = 0; i < num_multi_draws; i++) {
+    EXPECT_GE(param_vals.col(2)(i), 0);
+    EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+  }
 }
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   constexpr unsigned int seed = 0;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 1;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
@@ -339,7 +341,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(
-      model, single_path_inits, seed, chain, init_radius, history_size,
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
       save_iterations, refresh, callback, logger,
@@ -352,7 +354,11 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
   EXPECT_EQ(param_vals.cols(), 11);
-  EXPECT_EQ(param_vals.rows(), 8000);
+  EXPECT_EQ(param_vals.rows(), 8000);  // They can be in any order and any number
+  for (Eigen::Index i = 0; i < num_multi_draws; i++) {
+    EXPECT_GE(param_vals.col(2)(i), 0);
+    EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+  }
 
   // Parallel means we don't know order
   bool is_all_lp = true;
@@ -367,7 +373,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_noreturnlp) {
 
 TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   constexpr unsigned int seed = 0;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 1;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
@@ -400,7 +406,7 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(
-      model, single_path_inits, seed, chain, init_radius, history_size,
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
       save_iterations, refresh, callback, logger,
@@ -411,9 +417,13 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-
   EXPECT_EQ(param_vals.cols(), 11);
   EXPECT_EQ(param_vals.rows(), 8000);
+  // They can be in any order and any number
+  for (Eigen::Index i = 0; i < num_paths * num_draws; i++) {
+    EXPECT_GE(param_vals.col(2)(i), 0);
+    EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+  }
   bool is_all_lp = true;
   bool is_any_lp = false;
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {
@@ -426,7 +436,7 @@ TEST_F(ServicesPathfinderGLM, multi_resample_noreturnlp) {
 
 TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   constexpr unsigned int seed = 0;
-  constexpr unsigned int chain = 1;
+  constexpr unsigned int stride_id = 1;
   constexpr double init_radius = 1;
   constexpr double num_multi_draws = 100;
   constexpr int num_paths = 4;
@@ -458,7 +468,7 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   }
   stan::test::mock_callback callback;
   int rc = stan::services::pathfinder::pathfinder_lbfgs_multi(
-      model, single_path_inits, seed, chain, init_radius, history_size,
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
       init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
       num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
       save_iterations, refresh, callback, logger,
@@ -467,12 +477,16 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
       diagnostics, calculate_lp, resample);
   ASSERT_EQ(rc, 0);
 
-  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values().transpose();
-
+  Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
+  EXPECT_EQ(param_vals.cols(), 11);
+  EXPECT_EQ(param_vals.rows(), 8000);  // They can be in any order and any number
+  for (Eigen::Index i = 0; i < num_paths * num_draws; i++) {
+    EXPECT_GE(param_vals.col(2)(i), 0);
+    EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+  }
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
-  EXPECT_EQ(param_vals.cols(), 11);
-  EXPECT_EQ(param_vals.rows(), 8000);
+
   bool is_all_lp = true;
   bool is_any_lp = false;
   for (Eigen::Index i = 0; i < num_draws * num_paths; ++i) {

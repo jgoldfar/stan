@@ -872,13 +872,13 @@ inline auto pathfinder_lbfgs_single(
         error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls);
   } else {
     Eigen::Matrix<double, 1, Eigen::Dynamic> constrained_draws_vec(names.size());
-        constrained_draws_vec(2) = stride_id;
+    constrained_draws_vec(2) = stride_id - (ReturnLpSamples ? 1 : 0);
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratio;
     auto&& elbo_draws = elbo_best.repeat_draws;
     auto&& elbo_lp_ratio = elbo_best.lp_ratio;
     auto&& elbo_lp_mat = elbo_best.lp_mat;
     const int remaining_draws = num_draws - elbo_lp_ratio.rows();
-    const Eigen::Index num_unconstrained_params = names.size() - 2;
+    const Eigen::Index num_unconstrained_params = names.size() - 3;
     if (likely(remaining_draws > 0)) {
       try {
         internal::elbo_est_t est_draws = internal::est_approx_draws<false>(

@@ -519,6 +519,21 @@ normal_glm_param_summary() {
       0.0144594, 0.0145803, 0.0102204, 0.0146323;
   return {mean_param_vals, sd_param_vals};
 }
+
+template <typename T1>
+inline auto get_mean_sd(T1&& param_vals) {
+  Eigen::RowVectorXd mean_vals = param_vals.colwise().mean().eval();
+  Eigen::RowVectorXd sd_vals = (((param_vals.rowwise() - mean_vals)
+                                    .array()
+                                    .square()
+                                    .matrix()
+                                    .colwise()
+                                    .sum()
+                                    .array()
+                                / (param_vals.rows() - 1))
+                                   .sqrt()).eval();
+  return std::make_pair(mean_vals, sd_vals);
+}
 }  // namespace test
 }  // namespace stan
 

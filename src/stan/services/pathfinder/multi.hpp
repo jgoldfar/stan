@@ -76,6 +76,23 @@ inline void gen_pathfinder_draw(ConstrainFun&& constrain_fun, Model&& model,
     }
   }
 }
+
+template <typename Writer>
+struct concurrent_writer {
+  std::reference_wrapper<Writer> writer;
+  std::reference_wrapper<std::mutex> mut_;
+  explicit concurrent_writer(std::mutex& mut, Writer& writer) :
+    writer(writer), mut_(mut) {}
+  template <typename T>
+  void operator()(T&& t) {
+    std::lock_guard<std::mutex> lock(mut_.get());
+    writer.get()(t);
+  }
+  void operator()() {
+    std::lock_guard<std::mutex> lock(mut_.get());
+    writer.get()();
+  }
+};
 }  // namespace internal
 
 /**
@@ -201,8 +218,10 @@ inline int pathfinder_lbfgs_multi(
               elbo_estimates.push_back(std::move(std::get<1>(pathfinder_ret)));
             } else {
               // For no psis, have single write to both single and multi writers
-              stan::callbacks::multi_stream_writer<SingleParamWriter, ParamWriter> multi_param_writer(
-                  single_path_parameter_writer[iter], parameter_writer);
+              using multi_writer = stan::callbacks::multi_stream_writer<SingleParamWriter, internal::concurrent_writer<ParamWriter>>;
+              internal::concurrent_writer safe_write{write_mutex, parameter_writer};
+              multi_writer multi_param_writer(
+                  single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
                   = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
