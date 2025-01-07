@@ -127,14 +127,8 @@ inline int pathfinder_lbfgs_multi(
     ParamWriter& parameter_writer, DiagnosticWriter& diagnostic_writer,
     bool calculate_lp = true, bool psis_resample = true) {
   const auto start_pathfinders_time = std::chrono::steady_clock::now();
-  std::vector<std::string> param_names;
-  param_names.push_back("lp_approx__");
-  param_names.push_back("lp__");
-  param_names.push_back("pathfinder__");
-  model.constrained_param_names(param_names, true, true);
-  parameter_writer(param_names);
   std::atomic<size_t> lp_calls{0};
-  tbb::concurrent_vector<internal::elbo_est_t> elbo_estimates;
+  tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>> elbo_estimates;
   // This should never allocate after this
   elbo_estimates.reserve(num_paths + 10);
   auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
@@ -149,6 +143,7 @@ inline int pathfinder_lbfgs_multi(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
           for (int iter = r.begin(); iter < r.end(); ++iter) {
             if (psis_resample && calculate_lp) {
+              auto toss_write = [](auto&&... /* */) {};
               auto pathfinder_ret
                   = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
@@ -156,7 +151,7 @@ inline int pathfinder_lbfgs_multi(
                       tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
                       num_iterations, num_elbo_draws, num_draws,
                       save_iterations, refresh, interrupt, logger,
-                      init_writers[iter], single_path_parameter_writer[iter],
+                      init_writers[iter], toss_write,
                       single_path_diagnostic_writer[iter], calculate_lp,
                       psis_resample);
               if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
@@ -165,7 +160,7 @@ inline int pathfinder_lbfgs_multi(
                 return;
               }
               lp_calls += std::get<2>(pathfinder_ret);
-              elbo_estimates.push_back(std::move(std::get<1>(pathfinder_ret)));
+              elbo_estimates.push_back(std::make_pair(iter, std::move(std::get<1>(pathfinder_ret))));
             } else {
               // For no psis, have single write to both single and multi writers
               using multi_writer_t = stan::callbacks::multi_writer<
@@ -201,16 +196,16 @@ inline int pathfinder_lbfgs_multi(
   auto pathfinders_delta_time = stan::services::util::duration_diff(
       start_pathfinders_time, end_pathfinders_time);
   double psis_delta_time = 0;
+  const auto start_psis_time = std::chrono::steady_clock::now();
   stan::rng_t rng = util::create_rng(random_seed, stride_id);
   if (psis_resample && calculate_lp) {
-    const auto start_psis_time = std::chrono::steady_clock::now();
     const auto num_successful_paths = elbo_estimates.size();
     const Eigen::Index num_returned_samples = num_draws * num_successful_paths;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratios(num_returned_samples);
     Eigen::Index filling_start_row = 0;
     for (const auto& elbo_est : elbo_estimates) {
-      const Eigen::Index individ_num_lp = elbo_est.lp_ratio.size();
-      lp_ratios.segment(filling_start_row, individ_num_lp) = elbo_est.lp_ratio;
+      const Eigen::Index individ_num_lp = elbo_est.second.lp_ratio.size();
+      lp_ratios.segment(filling_start_row, individ_num_lp) = elbo_est.second.lp_ratio;
       filling_start_row += individ_num_lp;
     }
     const auto tail_len = std::min(0.2 * num_returned_samples,
@@ -224,32 +219,88 @@ inline int pathfinder_lbfgs_multi(
                      boost::iterator_range<double*>(
                          weight_vals.data(),
                          weight_vals.data() + weight_vals.size())));
+    // Draw idxs now so if we have to write single + multi we do it in one pass
+    Eigen::Matrix<Eigen::Index, -1, 1> multi_draw_idxs(num_multi_draws);
+    for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
+      multi_draw_idxs.coeffRef(i) = rand_psis_idx();
+    }
     Eigen::VectorXd unconstrained_col;
     Eigen::VectorXd approx_samples_constrained_col;
+    std::vector<std::string> param_names;
+    param_names.push_back("lp_approx__");
+    param_names.push_back("lp__");
+    param_names.push_back("pathfinder__");
+    model.constrained_param_names(param_names, true, true);
+    parameter_writer(param_names);
     const auto uc_param_size = param_names.size() - 3;
     Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
-    for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
-      auto draw_idx = rand_psis_idx();
-      // Calculate which pathfinder the draw came from
-      Eigen::Index path_num = std::floor(draw_idx / num_draws);
-      auto path_sample_idx = draw_idx % num_draws;
-      auto&& elbo_est = elbo_estimates[path_num];
-      auto&& lp_draws = elbo_est.lp_mat;
-      auto&& new_draws = elbo_est.repeat_draws;
-      const Eigen::Index param_size = new_draws.rows();
-      const auto num_samples = new_draws.cols();
-      unconstrained_col = new_draws.col(path_sample_idx);
-      constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
-                    rng);
-      sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-      sample_row(2) = path_num;
-      sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-      parameter_writer(sample_row);
+    /**
+     * The sort helps two things
+     * 1. For single path writer, the check for psis draw idxs is simple
+     * 2. For psis draw only, we use the same path more frequently
+     */
+    std::sort(multi_draw_idxs.data(),
+              multi_draw_idxs.data() + multi_draw_idxs.size());    
+    if (unlikely(single_path_parameter_writer[0].is_nonnull())) {
+      Eigen::Index multi_writer_position = 0;
+      for (Eigen::Index path_idx = 0; path_idx < num_successful_paths; ++path_idx) {
+        auto&& single_writer = single_path_parameter_writer[path_idx];
+        // If one is null, then all are null
+        single_writer(param_names);
+        auto&& elbo_est = elbo_estimates[path_idx].second;
+        auto&& lp_draws = elbo_est.lp_mat;
+        auto&& new_draws = elbo_est.repeat_draws;
+        const Eigen::Index param_size = new_draws.rows();
+        const auto num_samples = new_draws.cols();
+        for (Eigen::Index j = 0; j < num_samples; ++j) {
+          unconstrained_col = new_draws.col(j);
+          sample_row.head(2) = lp_draws.row(j).matrix();
+          sample_row(2) = elbo_estimates[path_idx].first;
+          constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
+                      rng);
+          sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+          single_writer(sample_row);
+          // If sample in multi draw, write to multi writer
+          if ((elbo_estimates[path_idx].first * num_samples + j) == multi_draw_idxs.coeff(multi_writer_position)) {
+            parameter_writer(sample_row);
+            // Since idxs are sorted, just increment the next position.
+            ++multi_writer_position;
+          }
+        }
+        const auto end_psis_time = std::chrono::steady_clock::now();
+        psis_delta_time
+            = stan::services::util::duration_diff(start_psis_time, end_psis_time);
+        single_writer();
+        const auto time_header = std::string("Elapsed Time: ");
+        std::string optim_time_str
+          = time_header + std::to_string(pathfinders_delta_time + psis_delta_time)
+            + std::string(" seconds")
+            + " (Total)";
+        single_writer(optim_time_str);
+      }
+    } else {
+      for (Eigen::Index draw_idx : multi_draw_idxs) {
+        // Calculate which pathfinder the draw came from
+        Eigen::Index path_num = std::floor(draw_idx / num_draws);
+        auto path_sample_idx = draw_idx % num_draws;
+        auto&& elbo_est = elbo_estimates[path_num].second;
+        auto&& lp_draws = elbo_est.lp_mat;
+        auto&& new_draws = elbo_est.repeat_draws;
+        const Eigen::Index param_size = new_draws.rows();
+        const auto num_samples = new_draws.cols();
+        unconstrained_col = new_draws.col(path_sample_idx);
+        constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
+                      rng);
+        sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
+        sample_row(2) = elbo_estimates[path_num].first;
+        sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+        parameter_writer(sample_row);
+      }
     }
-    const auto end_psis_time = std::chrono::steady_clock::now();
-    psis_delta_time
-        = stan::services::util::duration_diff(start_psis_time, end_psis_time);
   }
+  const auto end_psis_time = std::chrono::steady_clock::now();
+  psis_delta_time
+      = stan::services::util::duration_diff(start_psis_time, end_psis_time);
   parameter_writer();
   const auto time_header = std::string("Elapsed Time: ");
   std::string optim_time_str

@@ -49,6 +49,8 @@ class tee_writer final : public writer {
     writer2_(message);
   }
 
+  virtual bool is_nonnull() const noexcept { return writer1_.is_nonnull() && writer2_.is_nonnull(); }
+
  private:
   /**
    * The first writer

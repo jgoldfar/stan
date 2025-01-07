@@ -856,12 +856,6 @@ inline auto pathfinder_lbfgs_single(
                   + " evaluations: (" + std::to_string(num_evals) + ")");
     }
   }
-  std::vector<std::string> names;
-  names.push_back("lp_approx__");
-  names.push_back("lp__");
-  names.push_back("pathfinder__");
-  model.constrained_param_names(names, true, true);
-  parameter_writer(names);
   if (ReturnLpSamples && psis_resample && calculate_lp) {
     internal::elbo_est_t est_draws = internal::est_approx_draws<false>(
         lp_fun, constrain_fun, rng, taylor_approx_best, num_draws,
@@ -869,6 +863,12 @@ inline auto pathfinder_lbfgs_single(
     return internal::ret_pathfinder<ReturnLpSamples>(
         error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls);
   } else {
+    std::vector<std::string> names;
+    names.push_back("lp_approx__");
+    names.push_back("lp__");
+    names.push_back("pathfinder__");
+    model.constrained_param_names(names, true, true);
+    parameter_writer(names);
     Eigen::Matrix<double, 1, Eigen::Dynamic> constrained_draws_vec(
         names.size());
     constrained_draws_vec(2) = stride_id - (ReturnLpSamples ? 1 : 0);
