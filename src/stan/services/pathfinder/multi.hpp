@@ -128,7 +128,8 @@ inline int pathfinder_lbfgs_multi(
     bool calculate_lp = true, bool psis_resample = true) {
   const auto start_pathfinders_time = std::chrono::steady_clock::now();
   std::atomic<size_t> lp_calls{0};
-  tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>> elbo_estimates;
+  tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>>
+      elbo_estimates;
   // This should never allocate after this
   elbo_estimates.reserve(num_paths + 10);
   auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
@@ -160,7 +161,8 @@ inline int pathfinder_lbfgs_multi(
                 return;
               }
               lp_calls += std::get<2>(pathfinder_ret);
-              elbo_estimates.push_back(std::make_pair(iter, std::move(std::get<1>(pathfinder_ret))));
+              elbo_estimates.push_back(
+                  std::make_pair(iter, std::move(std::get<1>(pathfinder_ret))));
             } else {
               // For no psis, have single write to both single and multi writers
               using multi_writer_t = stan::callbacks::multi_writer<
@@ -205,7 +207,8 @@ inline int pathfinder_lbfgs_multi(
     Eigen::Index filling_start_row = 0;
     for (const auto& elbo_est : elbo_estimates) {
       const Eigen::Index individ_num_lp = elbo_est.second.lp_ratio.size();
-      lp_ratios.segment(filling_start_row, individ_num_lp) = elbo_est.second.lp_ratio;
+      lp_ratios.segment(filling_start_row, individ_num_lp)
+          = elbo_est.second.lp_ratio;
       filling_start_row += individ_num_lp;
     }
     const auto tail_len = std::min(0.2 * num_returned_samples,
@@ -240,10 +243,11 @@ inline int pathfinder_lbfgs_multi(
      * 2. For psis draw only, we use the same path more frequently
      */
     std::sort(multi_draw_idxs.data(),
-              multi_draw_idxs.data() + multi_draw_idxs.size());    
+              multi_draw_idxs.data() + multi_draw_idxs.size());
     if (unlikely(single_path_parameter_writer[0].is_nonnull())) {
       Eigen::Index multi_writer_position = 0;
-      for (Eigen::Index path_idx = 0; path_idx < num_successful_paths; ++path_idx) {
+      for (Eigen::Index path_idx = 0; path_idx < num_successful_paths;
+           ++path_idx) {
         auto&& single_writer = single_path_parameter_writer[path_idx];
         // If one is null, then all are null
         single_writer(param_names);
@@ -256,26 +260,27 @@ inline int pathfinder_lbfgs_multi(
           unconstrained_col = new_draws.col(j);
           sample_row.head(2) = lp_draws.row(j).matrix();
           sample_row(2) = elbo_estimates[path_idx].first;
-          constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
-                      rng);
+          constrain_fun(approx_samples_constrained_col, unconstrained_col,
+                        model, rng);
           sample_row.tail(uc_param_size) = approx_samples_constrained_col;
           single_writer(sample_row);
           // If sample in multi draw, write to multi writer
-          if ((elbo_estimates[path_idx].first * num_samples + j) == multi_draw_idxs.coeff(multi_writer_position)) {
+          if ((elbo_estimates[path_idx].first * num_samples + j)
+              == multi_draw_idxs.coeff(multi_writer_position)) {
             parameter_writer(sample_row);
             // Since idxs are sorted, just increment the next position.
             ++multi_writer_position;
           }
         }
         const auto end_psis_time = std::chrono::steady_clock::now();
-        psis_delta_time
-            = stan::services::util::duration_diff(start_psis_time, end_psis_time);
+        psis_delta_time = stan::services::util::duration_diff(start_psis_time,
+                                                              end_psis_time);
         single_writer();
         const auto time_header = std::string("Elapsed Time: ");
         std::string optim_time_str
-          = time_header + std::to_string(pathfinders_delta_time + psis_delta_time)
-            + std::string(" seconds")
-            + " (Total)";
+            = time_header
+              + std::to_string(pathfinders_delta_time + psis_delta_time)
+              + std::string(" seconds") + " (Total)";
         single_writer(optim_time_str);
       }
     } else {

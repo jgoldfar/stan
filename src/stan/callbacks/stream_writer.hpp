@@ -70,7 +70,6 @@ class stream_writer : public writer {
 
   virtual bool is_nonnull() const noexcept { return output_.good(); }
 
-
  private:
   /**
    * Output stream
