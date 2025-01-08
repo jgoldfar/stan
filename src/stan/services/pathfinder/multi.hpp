@@ -267,7 +267,7 @@ inline int pathfinder_lbfgs_multi(
           // If sample in multi draw, write to multi writer
           // We can have multiples of the same idx
           while ((elbo_estimates[path_idx].first * num_samples + j)
-              == multi_draw_idxs.coeff(multi_writer_position)) {
+                 == multi_draw_idxs.coeff(multi_writer_position)) {
             parameter_writer(sample_row);
             // Since idxs are sorted, just increment the next position.
             ++multi_writer_position;

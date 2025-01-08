@@ -114,9 +114,7 @@ class unique_stream_writer final : public writer {
     *output_ << comment_prefix_ << message << std::endl;
   }
 
-  bool is_nonnull() const noexcept {
-    return output_ != nullptr;
-  }
+  bool is_nonnull() const noexcept { return output_ != nullptr; }
 
  private:
   /**

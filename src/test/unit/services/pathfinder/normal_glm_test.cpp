@@ -177,14 +177,14 @@ TEST_F(ServicesPathfinderGLM, single_noreturnlp) {
 }
 
 namespace stan::test {
-  template <typename T>
-void init_null_writers(std::vector<T> &writers, size_t num_chains) {
+template <typename T>
+void init_null_writers(std::vector<T>& writers, size_t num_chains) {
   writers.reserve(num_chains);
   for (size_t i = 0; i < num_chains; ++i) {
     writers.emplace_back(nullptr);
   }
 }
-}
+}  // namespace stan::test
 
 TEST_F(ServicesPathfinderGLM, multi_null_unique) {
   constexpr unsigned int seed = 3;
@@ -209,7 +209,8 @@ TEST_F(ServicesPathfinderGLM, multi_null_unique) {
 
   std::unique_ptr<std::stringstream> string_ostream(new std::stringstream{});
   stan::test::test_logger logger(std::move(string_ostream));
-  std::vector<stan::callbacks::unique_stream_writer<std::ofstream>> single_path_parameter_writer;
+  std::vector<stan::callbacks::unique_stream_writer<std::ofstream>>
+      single_path_parameter_writer;
   stan::test::init_null_writers(single_path_parameter_writer, num_paths);
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
@@ -264,7 +265,6 @@ TEST_F(ServicesPathfinderGLM, multi_null_unique) {
     EXPECT_NEAR(0, all_sd_vals(2, i), 1e-2);
   }
 }
-
 
 TEST_F(ServicesPathfinderGLM, multi) {
   constexpr unsigned int seed = 3;
@@ -586,4 +586,3 @@ TEST_F(ServicesPathfinderGLM, multi_noresample_returnlp) {
   EXPECT_FALSE(is_all_lp);
   EXPECT_TRUE(is_any_lp);
 }
-
