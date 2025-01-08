@@ -227,6 +227,13 @@ inline int pathfinder_lbfgs_multi(
     for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
       multi_draw_idxs.coeffRef(i) = rand_psis_idx();
     }
+    /**
+     * The sort helps two things
+     * 1. For single path writer, the check for psis draw idxs is simple
+     * 2. For psis draw only, we use the same path more frequently
+     */
+    std::sort(multi_draw_idxs.data(),
+              multi_draw_idxs.data() + multi_draw_idxs.size());
     Eigen::VectorXd unconstrained_col;
     Eigen::VectorXd approx_samples_constrained_col;
     std::vector<std::string> param_names;
@@ -237,13 +244,6 @@ inline int pathfinder_lbfgs_multi(
     parameter_writer(param_names);
     const auto uc_param_size = param_names.size() - 3;
     Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
-    /**
-     * The sort helps two things
-     * 1. For single path writer, the check for psis draw idxs is simple
-     * 2. For psis draw only, we use the same path more frequently
-     */
-    std::sort(multi_draw_idxs.data(),
-              multi_draw_idxs.data() + multi_draw_idxs.size());
     if (unlikely(single_path_parameter_writer[0].is_nonnull())) {
       Eigen::Index multi_writer_position = 0;
       for (Eigen::Index path_idx = 0; path_idx < num_successful_paths;
@@ -265,7 +265,8 @@ inline int pathfinder_lbfgs_multi(
           sample_row.tail(uc_param_size) = approx_samples_constrained_col;
           single_writer(sample_row);
           // If sample in multi draw, write to multi writer
-          if ((elbo_estimates[path_idx].first * num_samples + j)
+          // We can have multiples of the same idx
+          while ((elbo_estimates[path_idx].first * num_samples + j)
               == multi_draw_idxs.coeff(multi_writer_position)) {
             parameter_writer(sample_row);
             // Since idxs are sorted, just increment the next position.
