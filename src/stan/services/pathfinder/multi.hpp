@@ -280,7 +280,7 @@ inline int pathfinder_lbfgs_multi(
         std::string optim_time_str
             = time_header
               + std::to_string(pathfinders_delta_time + psis_delta_time)
-              + std::string(" seconds") + " (Total)";
+              + std::string(" seconds") + " (Pathfinder)";
         single_writer(optim_time_str);
       }
     } else {
