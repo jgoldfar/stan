@@ -46,6 +46,9 @@ class writer {
    */
   virtual void operator()(const std::string& message) {}
 
+  /**
+   * Checks if stream is valid.
+   */
   virtual bool is_nonnull() const noexcept { return false; }
   /**
    * Writes multiple rows and columns of values in csv format.

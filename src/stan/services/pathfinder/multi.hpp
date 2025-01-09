@@ -172,7 +172,7 @@ inline int pathfinder_lbfgs_multi(
               multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
-                  = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
+                  = stan::services::pathfinder::pathfinder_lbfgs_single<false>(
                       model, *(init[iter]), random_seed, stride_id + iter,
                       init_radius, history_size, init_alpha, tol_obj,
                       tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
@@ -181,12 +181,12 @@ inline int pathfinder_lbfgs_multi(
                       init_writers[iter], multi_param_writer,
                       single_path_diagnostic_writer[iter], calculate_lp,
                       psis_resample);
-              if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
+              if (pathfinder_ret.first != error_codes::OK) {
                 logger.error(std::string("Pathfinder iteration: ")
                              + std::to_string(iter) + " failed.");
                 return;
               }
-              lp_calls += std::get<2>(pathfinder_ret);
+              lp_calls += pathfinder_ret.second;
             }
           }
         });

@@ -30,6 +30,7 @@ class multi_writer {
       : output_(std::forward<Args>(args)...) {}
 
   multi_writer();
+
   /**
    * @tparam T Any type accepted by a `writer` overload
    * @param[in] x A value to write to the output streams
@@ -43,6 +44,14 @@ class multi_writer {
   }
 
   /**
+   * Checks if all underlying writers are nonnull.
+   */
+  inline bool is_nonnull() const noexcept {
+    return stan::math::apply([](auto&&... output) { return (output.is_nonnull() && ...); },
+                         output_);
+  }
+
+  /**
    * Get the underlying stream
    */
   inline auto& get_stream() noexcept { return output_; }
@@ -53,6 +62,17 @@ class multi_writer {
    */
   std::tuple<std::reference_wrapper<Writers>...> output_;
 };
+
+namespace internal {
+template <typename T>
+struct is_multi_writer : std::false_type {};
+
+template <typename... Types>
+struct is_multi_writer<multi_writer<Types...>> : std::true_type {};
+}
+
+template <typename T>
+inline constexpr bool is_multi_writer_v = internal::is_multi_writer<std::decay_t<T>>::value;
 
 }  // namespace callbacks
 }  // namespace stan

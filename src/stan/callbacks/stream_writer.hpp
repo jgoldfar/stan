@@ -68,6 +68,9 @@ class stream_writer : public writer {
     output_ << comment_prefix_ << message << std::endl;
   }
 
+  /**
+   * Checks if stream is valid.
+   */
   virtual bool is_nonnull() const noexcept { return output_.good(); }
 
  private:
