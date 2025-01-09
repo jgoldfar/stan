@@ -47,8 +47,8 @@ class multi_writer {
    * Checks if all underlying writers are nonnull.
    */
   inline bool is_nonnull() const noexcept {
-    return stan::math::apply([](auto&&... output) { return (output.is_nonnull() && ...); },
-                         output_);
+    return stan::math::apply(
+        [](auto&&... output) { return (output.is_nonnull() && ...); }, output_);
   }
 
   /**
@@ -69,10 +69,11 @@ struct is_multi_writer : std::false_type {};
 
 template <typename... Types>
 struct is_multi_writer<multi_writer<Types...>> : std::true_type {};
-}
+}  // namespace internal
 
 template <typename T>
-inline constexpr bool is_multi_writer_v = internal::is_multi_writer<std::decay_t<T>>::value;
+inline constexpr bool is_multi_writer_v
+    = internal::is_multi_writer<std::decay_t<T>>::value;
 
 }  // namespace callbacks
 }  // namespace stan
