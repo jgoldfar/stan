@@ -462,7 +462,8 @@ inline taylor_approx_t taylor_approximation(
  */
 template <bool ReturnLpSamples, typename EigVec, typename ParamWriter>
 inline auto ret_pathfinder(int return_code, EigVec&& elbo_est,
-                           const std::atomic<size_t>& lp_calls, ParamWriter&& /* params */) noexcept {
+                           const std::atomic<size_t>& lp_calls,
+                           ParamWriter&& /* params */) noexcept {
   if constexpr (ReturnLpSamples) {
     return std::make_tuple(return_code, std::forward<EigVec>(elbo_est),
                            lp_calls.load());
@@ -472,7 +473,6 @@ inline auto ret_pathfinder(int return_code, EigVec&& elbo_est,
     return return_code;
   }
 }
-
 
 /**
  * Estimate the approximate draws given the taylor approximation.
@@ -617,8 +617,8 @@ inline auto pathfinder_lbfgs_single(
                                           logger, init_writer);
   } catch (const std::exception& e) {
     logger.error(path_num + e.what());
-    return internal::ret_pathfinder<ReturnLpSamples>(error_codes::SOFTWARE,
-                                                     internal::elbo_est_t{}, 0, parameter_writer);
+    return internal::ret_pathfinder<ReturnLpSamples>(
+        error_codes::SOFTWARE, internal::elbo_est_t{}, 0, parameter_writer);
   }
 
   const auto num_parameters = cont_vector.size();
@@ -836,7 +836,8 @@ inline auto pathfinder_lbfgs_single(
           + " Optimization failed to start, pathfinder cannot be run.");
       return internal::ret_pathfinder<ReturnLpSamples>(
           error_codes::SOFTWARE, internal::elbo_est_t{},
-          std::atomic<size_t>{num_evals + lbfgs.grad_evals()}, parameter_writer);
+          std::atomic<size_t>{num_evals + lbfgs.grad_evals()},
+          parameter_writer);
     } else {
       logger.warn(prefix_err_msg +
           " Stan will still attempt pathfinder but may fail or produce "
@@ -848,7 +849,8 @@ inline auto pathfinder_lbfgs_single(
         "Failure: None of the LBFGS iterations completed "
         "successfully");
     return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::SOFTWARE, internal::elbo_est_t{}, num_evals, parameter_writer);
+        error_codes::SOFTWARE, internal::elbo_est_t{}, num_evals,
+        parameter_writer);
   } else {
     if (refresh != 0) {
       logger.info(path_num + "Best Iter: [" + std::to_string(best_iteration)
@@ -861,7 +863,8 @@ inline auto pathfinder_lbfgs_single(
         lp_fun, constrain_fun, rng, taylor_approx_best, num_draws,
         taylor_approx_best.alpha, path_num, logger, calculate_lp);
     return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls, parameter_writer);
+        error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls,
+        parameter_writer);
   } else {
     std::vector<std::string> names;
     names.push_back("lp_approx__");
@@ -959,22 +962,21 @@ inline auto pathfinder_lbfgs_single(
       single_stream();
       std::string pathfinder_time_str = "Elapsed Time: ";
       pathfinder_time_str += std::to_string(pathfinder_delta_time)
-                            + std::string(" seconds (Pathfinder)");
+                             + std::string(" seconds (Pathfinder)");
       single_stream(pathfinder_time_str);
       single_stream();
       return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::OK, internal::elbo_est_t{}, num_evals, parameter_writer);
+          error_codes::OK, internal::elbo_est_t{}, num_evals, parameter_writer);
     } else {
       parameter_writer();
       std::string pathfinder_time_str = "Elapsed Time: ";
       pathfinder_time_str += std::to_string(pathfinder_delta_time)
-                            + std::string(" seconds (Pathfinder)");
+                             + std::string(" seconds (Pathfinder)");
       parameter_writer(pathfinder_time_str);
       parameter_writer();
       return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::OK, internal::elbo_est_t{}, num_evals, parameter_writer);
+          error_codes::OK, internal::elbo_est_t{}, num_evals, parameter_writer);
     }
-
   }
 }
 
