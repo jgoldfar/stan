@@ -91,7 +91,7 @@ struct concurrent_writer {
     writer(std::forward<T>(t));
   }
   void operator()() { writer(); }
-  void wait() {}
+  inline static constexpr void wait() {}
 };
 #endif
 
