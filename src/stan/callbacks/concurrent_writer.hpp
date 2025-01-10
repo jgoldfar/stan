@@ -1,6 +1,14 @@
 #ifndef STAN_CALLBACKS_CONCURRENT_WRITER_HPP
 #define STAN_CALLBACKS_CONCURRENT_WRITER_HPP
 
+#include <stan/math/prim/fun/Eigen.hpp>
+#include <stan/math/prim/meta.hpp>
+#include <tbb/concurrent_queue.h>
+#include <functional>
+#include <string>
+#include <thread>
+#include <vector>
+
 #ifdef STAN_THREADS
 /**
  * Takes a writer and makes it thread safe via multiple queues.
@@ -33,19 +41,16 @@ struct concurrent_writer {
       std::string str;
       std::vector<std::string> vec_str;
       Eigen::RowVectorXd eigen;
-      std::size_t max_size = 0;
       while (continue_writing_
              || !(str_messages_.empty() && vec_str_messages_.empty()
                   && eigen_messages_.empty())) {
-        if (str_messages_.try_pop(str)) {
+        while (str_messages_.try_pop(str)) {
           writer(str);
         }
-        if (vec_str_messages_.try_pop(vec_str)) {
+        while (vec_str_messages_.try_pop(vec_str)) {
           writer(vec_str);
         }
-        max_size = std::max(max_size,
-                            static_cast<std::size_t>(eigen_messages_.size()));
-        if (eigen_messages_.try_pop(eigen)) {
+        while (eigen_messages_.try_pop(eigen)) {
           writer(eigen);
         }
       }

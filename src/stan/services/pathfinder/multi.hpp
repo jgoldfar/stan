@@ -17,7 +17,6 @@
 #include <tbb/parallel_for.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/concurrent_queue.h>
-#include <tbb/task_group.h>
 #include <boost/random/discrete_distribution.hpp>
 #include <string>
 #include <vector>
