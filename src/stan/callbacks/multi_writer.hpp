@@ -4,6 +4,7 @@
 #include <stan/math/prim/fun/Eigen.hpp>
 #include <stan/callbacks/writer.hpp>
 #include <stan/math/prim/functor/for_each.hpp>
+#include <stan/math/prim/functor/apply.hpp>
 #include <memory>
 #include <ostream>
 #include <string>
