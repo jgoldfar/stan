@@ -31,10 +31,11 @@ namespace internal {
 /**
  * Takes a writer and makes it thread safe via multiple queues.
  * At the first write a single busy thread is spawned to write to the writer.
- * This class uses an `std::thread` instead of a tbb task graph because 
- * of deadlocking issues. A deadlock can occur if TBB gives all threads to the parallel for loop,
- * and all threads hit an instance of max capacity. TBB can choose to wait for a thread to finish
- * instead of spinning up the write thread. So to circumvent that issue, we use an std::thread.
+ * This class uses an `std::thread` instead of a tbb task graph because
+ * of deadlocking issues. A deadlock can occur if TBB gives all threads to the
+ * parallel for loop, and all threads hit an instance of max capacity. TBB can
+ * choose to wait for a thread to finish instead of spinning up the write
+ * thread. So to circumvent that issue, we use an std::thread.
  * @tparam Writer A type that inherits from `writer`
  */
 template <typename Writer>
@@ -46,36 +47,40 @@ struct concurrent_writer {
   bool continue_writing_{true};
   std::thread thread_;
   /**
-   * Constructs a concurrent writer from a writer and spins up a thread for writing.
+   * Constructs a concurrent writer from a writer and spins up a thread for
+   * writing.
    * @param writer A writer to write to
    */
-  explicit concurrent_writer(Writer& writer)
-      : writer(writer) {
-        str_messages_.set_capacity(1000);
-        vec_str_messages_.set_capacity(1000);
-        eigen_messages_.set_capacity(1000);
-        thread_ = std::thread([&]() {
-          std::string str;
-          std::vector<std::string> vec_str;
-          Eigen::RowVectorXd eigen;
-          std::size_t max_size = 0;
-          while (continue_writing_ || !(str_messages_.empty() && vec_str_messages_.empty() && eigen_messages_.empty())) {
-            if (str_messages_.try_pop(str)) {
-              writer(str);
-            }
-            if (vec_str_messages_.try_pop(vec_str)) {
-              writer(vec_str);
-            }
-            max_size = std::max(max_size, static_cast<std::size_t>(eigen_messages_.size()));
-            if (eigen_messages_.try_pop(eigen)) {
-              writer(eigen);
-            }
-          }
-        });
+  explicit concurrent_writer(Writer& writer) : writer(writer) {
+    str_messages_.set_capacity(1000);
+    vec_str_messages_.set_capacity(1000);
+    eigen_messages_.set_capacity(1000);
+    thread_ = std::thread([&]() {
+      std::string str;
+      std::vector<std::string> vec_str;
+      Eigen::RowVectorXd eigen;
+      std::size_t max_size = 0;
+      while (continue_writing_
+             || !(str_messages_.empty() && vec_str_messages_.empty()
+                  && eigen_messages_.empty())) {
+        if (str_messages_.try_pop(str)) {
+          writer(str);
+        }
+        if (vec_str_messages_.try_pop(vec_str)) {
+          writer(vec_str);
+        }
+        max_size = std::max(max_size,
+                            static_cast<std::size_t>(eigen_messages_.size()));
+        if (eigen_messages_.try_pop(eigen)) {
+          writer(eigen);
+        }
       }
+    });
+  }
   /**
    * Place a value in a queue for writing.
-   * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or a string
+   * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or
+   * a string
    * @param t A value to put on a queue
    */
   template <typename T>
@@ -96,9 +101,7 @@ struct concurrent_writer {
       static_assert(1, "Unsupported type passed to concurrent_writer");
     }
   }
-  void operator()() {
-    str_messages_.push(writer.get().comment_prefix());
-  }
+  void operator()() { str_messages_.push(writer.get().comment_prefix()); }
   void wait() {
     continue_writing_ = false;
     thread_.join();
@@ -108,17 +111,13 @@ struct concurrent_writer {
 template <typename Writer>
 struct concurrent_writer {
   std::reference_wrapper<Writer> writer;
-  explicit concurrent_writer(Writer& writer)
-      : writer(writer) {}
+  explicit concurrent_writer(Writer& writer) : writer(writer) {}
   template <typename T>
   void operator()(T&& t) {
     writer(std::forward<T>(t));
   }
-  void operator()() {
-    writer();
-  }
-  void wait() {
-  }
+  void operator()() { writer(); }
+  void wait() {}
 };
 #endif
 
@@ -267,7 +266,7 @@ inline int pathfinder_lbfgs_multi(
             }
           }
         });
-        safe_write.wait();
+    safe_write.wait();
   } catch (const std::exception& e) {
     logger.error(e.what());
     return error_codes::SOFTWARE;
@@ -365,30 +364,33 @@ inline int pathfinder_lbfgs_multi(
     } else {
       internal::concurrent_writer safe_write{parameter_writer};
       tbb::parallel_for(
-        tbb::blocked_range<Eigen::Index>(0, num_multi_draws), [&](tbb::blocked_range<Eigen::Index> r) {
-          stan::rng_t rng_local = util::create_rng(random_seed, stride_id + static_cast<std::size_t>(r.begin()));
-          Eigen::VectorXd unconstrained_col;
-          Eigen::VectorXd approx_samples_constrained_col;
-          Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
-          for (Eigen::Index i = r.begin(); i < r.end(); ++i) {
-            const Eigen::Index draw_idx = multi_draw_idxs.coeff(i);
-            // Calculate which pathfinder the draw came from
-            Eigen::Index path_num = std::floor(draw_idx / num_draws);
-            auto path_sample_idx = draw_idx % num_draws;
-            auto&& elbo_est = elbo_estimates[path_num].second;
-            auto&& lp_draws = elbo_est.lp_mat;
-            auto&& new_draws = elbo_est.repeat_draws;
-            const Eigen::Index param_size = new_draws.rows();
-            const auto num_samples = new_draws.cols();
-            unconstrained_col = new_draws.col(path_sample_idx);
-            constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
-                          rng_local);
-            sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-            sample_row(2) = elbo_estimates[path_num].first;
-            sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-            safe_write(sample_row);
-          }
-      });
+          tbb::blocked_range<Eigen::Index>(0, num_multi_draws),
+          [&](tbb::blocked_range<Eigen::Index> r) {
+            stan::rng_t rng_local = util::create_rng(
+                random_seed, stride_id + static_cast<std::size_t>(r.begin()));
+            Eigen::VectorXd unconstrained_col;
+            Eigen::VectorXd approx_samples_constrained_col;
+            Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(
+                param_names.size());
+            for (Eigen::Index i = r.begin(); i < r.end(); ++i) {
+              const Eigen::Index draw_idx = multi_draw_idxs.coeff(i);
+              // Calculate which pathfinder the draw came from
+              Eigen::Index path_num = std::floor(draw_idx / num_draws);
+              auto path_sample_idx = draw_idx % num_draws;
+              auto&& elbo_est = elbo_estimates[path_num].second;
+              auto&& lp_draws = elbo_est.lp_mat;
+              auto&& new_draws = elbo_est.repeat_draws;
+              const Eigen::Index param_size = new_draws.rows();
+              const auto num_samples = new_draws.cols();
+              unconstrained_col = new_draws.col(path_sample_idx);
+              constrain_fun(approx_samples_constrained_col, unconstrained_col,
+                            model, rng_local);
+              sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
+              sample_row(2) = elbo_estimates[path_num].first;
+              sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+              safe_write(sample_row);
+            }
+          });
       safe_write.wait();
     }
   }

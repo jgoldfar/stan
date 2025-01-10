@@ -55,8 +55,9 @@ class tee_writer final : public writer {
   virtual bool is_nonnull() const noexcept {
     return writer1_.is_nonnull() && writer2_.is_nonnull();
   }
-  const char* comment_prefix() const noexcept { return writer1_.comment_prefix(); }
-
+  const char* comment_prefix() const noexcept {
+    return writer1_.comment_prefix();
+  }
 
  private:
   /**

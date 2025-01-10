@@ -75,7 +75,9 @@ class stream_writer : public writer {
   /**
    * Return the comment prefix
    */
-  const char* comment_prefix() const noexcept { return comment_prefix_.c_str(); }
+  const char* comment_prefix() const noexcept {
+    return comment_prefix_.c_str();
+  }
 
  private:
   /**

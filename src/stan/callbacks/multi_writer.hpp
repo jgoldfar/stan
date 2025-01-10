@@ -55,7 +55,9 @@ class multi_writer {
    * Get the underlying stream
    */
   inline auto& get_stream() noexcept { return output_; }
-  const char* comment_prefix() const noexcept { return std::get<0>(output_).comment_prefix(); }
+  const char* comment_prefix() const noexcept {
+    return std::get<0>(output_).comment_prefix();
+  }
 
  private:
   /**
