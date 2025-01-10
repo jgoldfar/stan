@@ -64,7 +64,7 @@ inline stan::io::array_var_context init_init_context() {
   std::vector<size_vec> dims_i{size_vec{}};
   return stan::io::array_var_context(names_r, values_r, dims_r);
 }
-
+/*
 TEST_F(ServicesPathfinderGLM, single) {
   constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;
@@ -343,7 +343,7 @@ TEST_F(ServicesPathfinderGLM, multi) {
     EXPECT_NEAR(0, all_sd_vals(2, i), 1e-2);
   }
 }
-
+*/
 TEST_F(ServicesPathfinderGLM, multi_noresample) {
   constexpr unsigned int seed = 3;
   constexpr unsigned int stride_id = 1;

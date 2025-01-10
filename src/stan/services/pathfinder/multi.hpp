@@ -16,6 +16,8 @@
 #include <stan/services/util/initialize.hpp>
 #include <tbb/parallel_for.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/concurrent_queue.h>
+#include <tbb/task_group.h>
 #include <boost/random/discrete_distribution.hpp>
 #include <string>
 #include <vector>
@@ -25,23 +27,101 @@ namespace services {
 namespace pathfinder {
 
 namespace internal {
-
+#ifdef STAN_THREADS
+/**
+ * Takes a writer and makes it thread safe via multiple queues.
+ * At the first write a single busy thread is spawned to write to the writer.
+ * This class uses an `std::thread` instead of a tbb task graph because 
+ * of deadlocking issues. A deadlock can occur if TBB gives all threads to the parallel for loop,
+ * and all threads hit an instance of max capacity. TBB can choose to wait for a thread to finish
+ * instead of spinning up the write thread. So to circumvent that issue, we use an std::thread.
+ * @tparam Writer A type that inherits from `writer`
+ */
 template <typename Writer>
 struct concurrent_writer {
   std::reference_wrapper<Writer> writer;
-  std::reference_wrapper<std::mutex> mut_;
-  explicit concurrent_writer(std::mutex& mut, Writer& writer)
-      : writer(writer), mut_(mut) {}
+  tbb::concurrent_bounded_queue<std::string> str_messages_{};
+  tbb::concurrent_bounded_queue<std::vector<std::string>> vec_str_messages_{};
+  tbb::concurrent_bounded_queue<Eigen::RowVectorXd> eigen_messages_{};
+  bool continue_writing_{true};
+  std::thread thread_;
+  /**
+   * Constructs a concurrent writer from a writer and spins up a thread for writing.
+   * @param writer A writer to write to
+   */
+  explicit concurrent_writer(Writer& writer)
+      : writer(writer) {
+        str_messages_.set_capacity(1000);
+        vec_str_messages_.set_capacity(1000);
+        eigen_messages_.set_capacity(1000);
+        thread_ = std::thread([&]() {
+          std::string str;
+          std::vector<std::string> vec_str;
+          Eigen::RowVectorXd eigen;
+          std::size_t max_size = 0;
+          while (continue_writing_ || !(str_messages_.empty() && vec_str_messages_.empty() && eigen_messages_.empty())) {
+            if (str_messages_.try_pop(str)) {
+              writer(str);
+            }
+            if (vec_str_messages_.try_pop(vec_str)) {
+              writer(vec_str);
+            }
+            max_size = std::max(max_size, static_cast<std::size_t>(eigen_messages_.size()));
+            if (eigen_messages_.try_pop(eigen)) {
+              writer(eigen);
+            }
+          }
+        });
+      }
+  /**
+   * Place a value in a queue for writing.
+   * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or a string
+   * @param t A value to put on a queue
+   */
   template <typename T>
   void operator()(T&& t) {
-    std::lock_guard<std::mutex> lock(mut_.get());
-    writer.get()(t);
+    if constexpr (stan::is_std_vector<T>::value) {
+      if constexpr (std::is_arithmetic_v<stan::value_type_t<T>>) {
+        eigen_messages_.push(Eigen::RowVectorXd::Map(t.data(), t.size()));
+      } else {
+        vec_str_messages_.push(t);
+      }
+    } else if constexpr (std::is_same_v<T, std::string>) {
+      str_messages_.push(t);
+    } else if constexpr (stan::is_eigen_row_vector<T>::value) {
+      eigen_messages_.push(t);
+    } else if constexpr (stan::is_eigen_col_vector<T>::value) {
+      eigen_messages_.push(t.transpose());
+    } else {
+      static_assert(1, "Unsupported type passed to concurrent_writer");
+    }
   }
   void operator()() {
-    std::lock_guard<std::mutex> lock(mut_.get());
-    writer.get()();
+    str_messages_.push(writer.get().comment_prefix());
+  }
+  void wait() {
+    continue_writing_ = false;
+    thread_.join();
   }
 };
+#else
+template <typename Writer>
+struct concurrent_writer {
+  std::reference_wrapper<Writer> writer;
+  explicit concurrent_writer(Writer& writer)
+      : writer(writer) {}
+  template <typename T>
+  void operator()(T&& t) {
+    writer(std::forward<T>(t));
+  }
+  void operator()() {
+    writer();
+  }
+  void wait() {
+  }
+};
+#endif
+
 }  // namespace internal
 
 /**
@@ -138,8 +218,7 @@ inline int pathfinder_lbfgs_multi(
     return constrained_draws;
   };
   try {
-    // Idea: Instead of a mutex to lock the writes use a queue and busy thread
-    std::mutex write_mutex;
+    internal::concurrent_writer safe_write{parameter_writer};
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
           for (int iter = r.begin(); iter < r.end(); ++iter) {
@@ -167,8 +246,6 @@ inline int pathfinder_lbfgs_multi(
               // For no psis, have single write to both single and multi writers
               using multi_writer_t = stan::callbacks::multi_writer<
                   SingleParamWriter, internal::concurrent_writer<ParamWriter>>;
-              internal::concurrent_writer safe_write{write_mutex,
-                                                     parameter_writer};
               multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
@@ -190,6 +267,7 @@ inline int pathfinder_lbfgs_multi(
             }
           }
         });
+        safe_write.wait();
   } catch (const std::exception& e) {
     logger.error(e.what());
     return error_codes::SOFTWARE;
@@ -199,8 +277,8 @@ inline int pathfinder_lbfgs_multi(
       start_pathfinders_time, end_pathfinders_time);
   double psis_delta_time = 0;
   const auto start_psis_time = std::chrono::steady_clock::now();
-  stan::rng_t rng = util::create_rng(random_seed, stride_id);
   if (psis_resample && calculate_lp) {
+    stan::rng_t rng = util::create_rng(random_seed, stride_id);
     const auto num_successful_paths = elbo_estimates.size();
     const Eigen::Index num_returned_samples = num_draws * num_successful_paths;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratios(num_returned_samples);
@@ -234,8 +312,6 @@ inline int pathfinder_lbfgs_multi(
      */
     std::sort(multi_draw_idxs.data(),
               multi_draw_idxs.data() + multi_draw_idxs.size());
-    Eigen::VectorXd unconstrained_col;
-    Eigen::VectorXd approx_samples_constrained_col;
     std::vector<std::string> param_names;
     param_names.push_back("lp_approx__");
     param_names.push_back("lp__");
@@ -243,8 +319,10 @@ inline int pathfinder_lbfgs_multi(
     model.constrained_param_names(param_names, true, true);
     parameter_writer(param_names);
     const auto uc_param_size = param_names.size() - 3;
-    Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
     if (unlikely(single_path_parameter_writer[0].is_nonnull())) {
+      Eigen::VectorXd unconstrained_col;
+      Eigen::VectorXd approx_samples_constrained_col;
+      Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
       Eigen::Index multi_writer_position = 0;
       for (Eigen::Index path_idx = 0; path_idx < num_successful_paths;
            ++path_idx) {
@@ -285,23 +363,33 @@ inline int pathfinder_lbfgs_multi(
         single_writer(optim_time_str);
       }
     } else {
-      for (Eigen::Index draw_idx : multi_draw_idxs) {
-        // Calculate which pathfinder the draw came from
-        Eigen::Index path_num = std::floor(draw_idx / num_draws);
-        auto path_sample_idx = draw_idx % num_draws;
-        auto&& elbo_est = elbo_estimates[path_num].second;
-        auto&& lp_draws = elbo_est.lp_mat;
-        auto&& new_draws = elbo_est.repeat_draws;
-        const Eigen::Index param_size = new_draws.rows();
-        const auto num_samples = new_draws.cols();
-        unconstrained_col = new_draws.col(path_sample_idx);
-        constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
-                      rng);
-        sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-        sample_row(2) = elbo_estimates[path_num].first;
-        sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-        parameter_writer(sample_row);
-      }
+      internal::concurrent_writer safe_write{parameter_writer};
+      tbb::parallel_for(
+        tbb::blocked_range<Eigen::Index>(0, num_multi_draws), [&](tbb::blocked_range<Eigen::Index> r) {
+          stan::rng_t rng_local = util::create_rng(random_seed, stride_id + static_cast<std::size_t>(r.begin()));
+          Eigen::VectorXd unconstrained_col;
+          Eigen::VectorXd approx_samples_constrained_col;
+          Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
+          for (Eigen::Index i = r.begin(); i < r.end(); ++i) {
+            const Eigen::Index draw_idx = multi_draw_idxs.coeff(i);
+            // Calculate which pathfinder the draw came from
+            Eigen::Index path_num = std::floor(draw_idx / num_draws);
+            auto path_sample_idx = draw_idx % num_draws;
+            auto&& elbo_est = elbo_estimates[path_num].second;
+            auto&& lp_draws = elbo_est.lp_mat;
+            auto&& new_draws = elbo_est.repeat_draws;
+            const Eigen::Index param_size = new_draws.rows();
+            const auto num_samples = new_draws.cols();
+            unconstrained_col = new_draws.col(path_sample_idx);
+            constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
+                          rng_local);
+            sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
+            sample_row(2) = elbo_estimates[path_num].first;
+            sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+            safe_write(sample_row);
+          }
+      });
+      safe_write.wait();
     }
   }
   const auto end_psis_time = std::chrono::steady_clock::now();

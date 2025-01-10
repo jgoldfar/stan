@@ -119,6 +119,7 @@ class unique_stream_writer final : public writer {
    */
   bool is_nonnull() const noexcept { return output_ != nullptr; }
 
+  const char* comment_prefix() const noexcept { return comment_prefix_.c_str(); }
  private:
   /**
    * Comma formatter for writing Eigen matrices
