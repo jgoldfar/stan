@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+namespace stan::callbacks {
 #ifdef STAN_THREADS
 /**
  * Takes a writer and makes it thread safe via multiple queues.
@@ -99,5 +100,5 @@ struct concurrent_writer {
   inline static constexpr void wait() {}
 };
 #endif
-
+}  // namespace stan::callbacks
 #endif

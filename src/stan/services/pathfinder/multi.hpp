@@ -5,6 +5,7 @@
 #include <stan/callbacks/logger.hpp>
 #include <stan/callbacks/writer.hpp>
 #include <stan/callbacks/multi_writer.hpp>
+#include <stan/callbacks/concurrent_writer.hpp>
 #include <stan/io/var_context.hpp>
 #include <stan/optimization/bfgs.hpp>
 #include <stan/optimization/lbfgs_update.hpp>
@@ -25,102 +26,6 @@ namespace stan {
 namespace services {
 namespace pathfinder {
 
-namespace internal {
-#ifdef STAN_THREADS
-/**
- * Takes a writer and makes it thread safe via multiple queues.
- * At the first write a single busy thread is spawned to write to the writer.
- * This class uses an `std::thread` instead of a tbb task graph because
- * of deadlocking issues. A deadlock can occur if TBB gives all threads to the
- * parallel for loop, and all threads hit an instance of max capacity. TBB can
- * choose to wait for a thread to finish instead of spinning up the write
- * thread. So to circumvent that issue, we use an std::thread.
- * @tparam Writer A type that inherits from `writer`
- */
-template <typename Writer>
-struct concurrent_writer {
-  std::reference_wrapper<Writer> writer;
-  tbb::concurrent_bounded_queue<std::string> str_messages_{};
-  tbb::concurrent_bounded_queue<std::vector<std::string>> vec_str_messages_{};
-  tbb::concurrent_bounded_queue<Eigen::RowVectorXd> eigen_messages_{};
-  bool continue_writing_{true};
-  std::thread thread_;
-  /**
-   * Constructs a concurrent writer from a writer and spins up a thread for
-   * writing.
-   * @param writer A writer to write to
-   */
-  explicit concurrent_writer(Writer& writer) : writer(writer) {
-    str_messages_.set_capacity(1000);
-    vec_str_messages_.set_capacity(1000);
-    eigen_messages_.set_capacity(1000);
-    thread_ = std::thread([&]() {
-      std::string str;
-      std::vector<std::string> vec_str;
-      Eigen::RowVectorXd eigen;
-      std::size_t max_size = 0;
-      while (continue_writing_
-             || !(str_messages_.empty() && vec_str_messages_.empty()
-                  && eigen_messages_.empty())) {
-        if (str_messages_.try_pop(str)) {
-          writer(str);
-        }
-        if (vec_str_messages_.try_pop(vec_str)) {
-          writer(vec_str);
-        }
-        max_size = std::max(max_size,
-                            static_cast<std::size_t>(eigen_messages_.size()));
-        if (eigen_messages_.try_pop(eigen)) {
-          writer(eigen);
-        }
-      }
-    });
-  }
-  /**
-   * Place a value in a queue for writing.
-   * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or
-   * a string
-   * @param t A value to put on a queue
-   */
-  template <typename T>
-  void operator()(T&& t) {
-    if constexpr (stan::is_std_vector<T>::value) {
-      if constexpr (std::is_arithmetic_v<stan::value_type_t<T>>) {
-        eigen_messages_.push(Eigen::RowVectorXd::Map(t.data(), t.size()));
-      } else {
-        vec_str_messages_.push(t);
-      }
-    } else if constexpr (std::is_same_v<T, std::string>) {
-      str_messages_.push(t);
-    } else if constexpr (stan::is_eigen_row_vector<T>::value) {
-      eigen_messages_.push(t);
-    } else if constexpr (stan::is_eigen_col_vector<T>::value) {
-      eigen_messages_.push(t.transpose());
-    } else {
-      static_assert(1, "Unsupported type passed to concurrent_writer");
-    }
-  }
-  void operator()() { str_messages_.push(writer.get().comment_prefix()); }
-  void wait() {
-    continue_writing_ = false;
-    thread_.join();
-  }
-};
-#else
-template <typename Writer>
-struct concurrent_writer {
-  std::reference_wrapper<Writer> writer;
-  explicit concurrent_writer(Writer& writer) : writer(writer) {}
-  template <typename T>
-  void operator()(T&& t) {
-    writer(std::forward<T>(t));
-  }
-  void operator()() { writer(); }
-  void wait() {}
-};
-#endif
-
-}  // namespace internal
 
 /**
  * Runs multiple pathfinders with final approximate samples drawn using PSIS.
@@ -216,7 +121,7 @@ inline int pathfinder_lbfgs_multi(
     return constrained_draws;
   };
   try {
-    internal::concurrent_writer safe_write{parameter_writer};
+    stan::callbacks::concurrent_writer safe_write{parameter_writer};
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
           for (int iter = r.begin(); iter < r.end(); ++iter) {
@@ -243,7 +148,7 @@ inline int pathfinder_lbfgs_multi(
             } else {
               // For no psis, have single write to both single and multi writers
               using multi_writer_t = stan::callbacks::multi_writer<
-                  SingleParamWriter, internal::concurrent_writer<ParamWriter>>;
+                  SingleParamWriter, stan::callbacks::concurrent_writer<ParamWriter>>;
               multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
@@ -273,32 +178,27 @@ inline int pathfinder_lbfgs_multi(
   const auto end_pathfinders_time = std::chrono::steady_clock::now();
   auto pathfinders_delta_time = stan::services::util::duration_diff(
       start_pathfinders_time, end_pathfinders_time);
+      
   double psis_delta_time = 0;
   const auto start_psis_time = std::chrono::steady_clock::now();
   if (psis_resample && calculate_lp) {
-    stan::rng_t rng = util::create_rng(random_seed, stride_id);
     const auto num_successful_paths = elbo_estimates.size();
     const Eigen::Index num_returned_samples = num_draws * num_successful_paths;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratios(num_returned_samples);
-    Eigen::Index filling_start_row = 0;
     for (const auto& elbo_est : elbo_estimates) {
       const Eigen::Index individ_num_lp = elbo_est.second.lp_ratio.size();
       lp_ratios.segment(filling_start_row, individ_num_lp)
           = elbo_est.second.lp_ratio;
-      filling_start_row += individ_num_lp;
     }
     const auto tail_len = std::min(0.2 * num_returned_samples,
                                    3 * std::sqrt(num_returned_samples));
     Eigen::Array<double, Eigen::Dynamic, 1> weight_vals
         = stan::services::psis::psis_weights(lp_ratios, tail_len, logger);
-    boost::variate_generator<stan::rng_t&, boost::random::discrete_distribution<
-                                               Eigen::Index, double>>
-        rand_psis_idx(
-            rng, boost::random::discrete_distribution<Eigen::Index, double>(
-                     boost::iterator_range<double*>(
-                         weight_vals.data(),
-                         weight_vals.data() + weight_vals.size())));
-    // Draw idxs now so if we have to write single + multi we do it in one pass
+    stan::rng_t rng = util::create_rng(random_seed, stride_id);
+    using discrete_dist_t = boost::random::discrete_distribution<Eigen::Index, double>;
+    boost::variate_generator<stan::rng_t&, discrete_dist_t> rand_psis_idx(
+      rng, discrete_dist_t(boost::iterator_range<double*>(weight_vals.data(),
+        weight_vals.data() + weight_vals.size())));
     Eigen::Matrix<Eigen::Index, -1, 1> multi_draw_idxs(num_multi_draws);
     for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
       multi_draw_idxs.coeffRef(i) = rand_psis_idx();
@@ -361,7 +261,7 @@ inline int pathfinder_lbfgs_multi(
         single_writer(optim_time_str);
       }
     } else {
-      internal::concurrent_writer safe_write{parameter_writer};
+      stan::callbacks::concurrent_writer safe_write{parameter_writer};
       tbb::parallel_for(
           tbb::blocked_range<Eigen::Index>(0, num_multi_draws),
           [&](tbb::blocked_range<Eigen::Index> r) {
@@ -375,12 +275,12 @@ inline int pathfinder_lbfgs_multi(
               const Eigen::Index draw_idx = multi_draw_idxs.coeff(i);
               // Calculate which pathfinder the draw came from
               Eigen::Index path_num = std::floor(draw_idx / num_draws);
-              auto path_sample_idx = draw_idx % num_draws;
               auto&& elbo_est = elbo_estimates[path_num].second;
               auto&& lp_draws = elbo_est.lp_mat;
               auto&& new_draws = elbo_est.repeat_draws;
               const Eigen::Index param_size = new_draws.rows();
               const auto num_samples = new_draws.cols();
+              auto path_sample_idx = draw_idx % num_draws;
               unconstrained_col = new_draws.col(path_sample_idx);
               constrain_fun(approx_samples_constrained_col, unconstrained_col,
                             model, rng_local);
