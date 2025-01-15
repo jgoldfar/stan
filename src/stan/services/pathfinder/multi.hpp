@@ -185,10 +185,12 @@ inline int pathfinder_lbfgs_multi(
     const auto num_successful_paths = elbo_estimates.size();
     const Eigen::Index num_returned_samples = num_draws * num_successful_paths;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratios(num_returned_samples);
+    Eigen::Index filling_start_row = 0;
     for (const auto& elbo_est : elbo_estimates) {
       const Eigen::Index individ_num_lp = elbo_est.second.lp_ratio.size();
       lp_ratios.segment(filling_start_row, individ_num_lp)
           = elbo_est.second.lp_ratio;
+      filling_start_row += individ_num_lp;
     }
     const auto tail_len = std::min(0.2 * num_returned_samples,
                                    3 * std::sqrt(num_returned_samples));
