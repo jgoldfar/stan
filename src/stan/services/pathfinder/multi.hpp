@@ -26,7 +26,6 @@ namespace stan {
 namespace services {
 namespace pathfinder {
 
-
 /**
  * Runs multiple pathfinders with final approximate samples drawn using PSIS.
  *
@@ -148,7 +147,8 @@ inline int pathfinder_lbfgs_multi(
             } else {
               // For no psis, have single write to both single and multi writers
               using multi_writer_t = stan::callbacks::multi_writer<
-                  SingleParamWriter, stan::callbacks::concurrent_writer<ParamWriter>>;
+                  SingleParamWriter,
+                  stan::callbacks::concurrent_writer<ParamWriter>>;
               multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
@@ -178,7 +178,7 @@ inline int pathfinder_lbfgs_multi(
   const auto end_pathfinders_time = std::chrono::steady_clock::now();
   auto pathfinders_delta_time = stan::services::util::duration_diff(
       start_pathfinders_time, end_pathfinders_time);
-      
+
   double psis_delta_time = 0;
   const auto start_psis_time = std::chrono::steady_clock::now();
   if (psis_resample && calculate_lp) {
@@ -195,10 +195,11 @@ inline int pathfinder_lbfgs_multi(
     Eigen::Array<double, Eigen::Dynamic, 1> weight_vals
         = stan::services::psis::psis_weights(lp_ratios, tail_len, logger);
     stan::rng_t rng = util::create_rng(random_seed, stride_id);
-    using discrete_dist_t = boost::random::discrete_distribution<Eigen::Index, double>;
+    using discrete_dist_t
+        = boost::random::discrete_distribution<Eigen::Index, double>;
     boost::variate_generator<stan::rng_t&, discrete_dist_t> rand_psis_idx(
-      rng, discrete_dist_t(boost::iterator_range<double*>(weight_vals.data(),
-        weight_vals.data() + weight_vals.size())));
+        rng, discrete_dist_t(boost::iterator_range<double*>(
+                 weight_vals.data(), weight_vals.data() + weight_vals.size())));
     Eigen::Matrix<Eigen::Index, -1, 1> multi_draw_idxs(num_multi_draws);
     for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
       multi_draw_idxs.coeffRef(i) = rand_psis_idx();
