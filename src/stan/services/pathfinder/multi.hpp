@@ -181,7 +181,10 @@ inline int pathfinder_lbfgs_multi(
 
   double psis_delta_time = 0;
   const auto start_psis_time = std::chrono::steady_clock::now();
-  if (psis_resample && calculate_lp) {
+  // All work is done in the parallel_for loop
+  if (!(psis_resample && calculate_lp)) {
+    return error_codes::OK;
+  } else {
     const auto num_successful_paths = elbo_estimates.size();
     const Eigen::Index num_returned_samples = num_draws * num_successful_paths;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratios(num_returned_samples);
