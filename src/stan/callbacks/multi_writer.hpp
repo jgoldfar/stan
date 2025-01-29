@@ -22,7 +22,8 @@ class multi_writer {
  public:
   /**
    * Constructs a multi stream writer from a parameter pack of writers.
-   * @tparam Args A parameter pack of writers. Should be the same type as `Writers`
+   * @tparam Args A parameter pack of writers. Should be the same type as
+   * `Writers`
    * @param[in, out] args A parameter pack of writers
    */
   template <typename... Args>
@@ -59,7 +60,8 @@ class multi_writer {
    */
   inline auto& get_stream() noexcept { return output_; }
   /**
-   * Assuming all streams have the same comment prefix, return the first comment prefix.
+   * Assuming all streams have the same comment prefix, return the first comment
+   * prefix.
    */
   const char* comment_prefix() const noexcept {
     return std::get<0>(output_).comment_prefix();
@@ -92,6 +94,5 @@ template <typename T>
 inline constexpr bool is_multi_writer_v = is_multi_writer<T>::value;
 
 }  // namespace stan::callbacks
-
 
 #endif

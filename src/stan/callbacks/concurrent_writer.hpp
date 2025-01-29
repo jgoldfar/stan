@@ -79,11 +79,14 @@ struct concurrent_writer {
       }
     } else if constexpr (std::is_same_v<T, std::string>) {
       str_messages_.push(std::forward<T>(t));
-    } else if constexpr (stan::is_eigen_row_vector<T>::value || stan::is_eigen_col_vector<T>::value) {
+    } else if constexpr (stan::is_eigen_row_vector<T>::value
+                         || stan::is_eigen_col_vector<T>::value) {
       eigen_messages_.push(std::forward<T>(t));
     } else {
-      static_assert(1, "Unsupported type passed to concurrent_writer. "
-      "This is an internal error. Please file an issue on the stan github repo.");
+      static_assert(1,
+                    "Unsupported type passed to concurrent_writer. "
+                    "This is an internal error. Please file an issue on the "
+                    "stan github repo.");
     }
   }
   /**
