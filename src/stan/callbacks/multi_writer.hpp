@@ -10,8 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace stan {
-namespace callbacks {
+namespace stan::callbacks {
 
 /**
  * `multi_writer` is an layer on top of a writer class that
@@ -23,14 +22,14 @@ class multi_writer {
  public:
   /**
    * Constructs a multi stream writer from a parameter pack of writers.
-   *
+   * @tparam Args A parameter pack of writers. Should be the same type as `Writers`
    * @param[in, out] args A parameter pack of writers
    */
   template <typename... Args>
   explicit multi_writer(Args&&... args)
       : output_(std::forward<Args>(args)...) {}
 
-  multi_writer();
+  multi_writer() = default;
 
   /**
    * @tparam T Any type accepted by a `writer` overload
@@ -40,6 +39,9 @@ class multi_writer {
   void operator()(T&& x) {
     stan::math::for_each([&](auto&& output) { output(x); }, output_);
   }
+  /**
+   * Write a comment prefix to each writer
+   */
   void operator()() {
     stan::math::for_each([](auto&& output) { output(); }, output_);
   }
@@ -53,17 +55,18 @@ class multi_writer {
   }
 
   /**
-   * Get the underlying stream
+   * Get the tuple of underlying streams
    */
   inline auto& get_stream() noexcept { return output_; }
+  /**
+   * Assuming all streams have the same comment prefix, return the first comment prefix.
+   */
   const char* comment_prefix() const noexcept {
     return std::get<0>(output_).comment_prefix();
   }
 
  private:
-  /**
-   * Output stream
-   */
+  // Output streams
   std::tuple<std::reference_wrapper<Writers>...> output_;
 };
 
@@ -75,11 +78,20 @@ template <typename... Types>
 struct is_multi_writer<multi_writer<Types...>> : std::true_type {};
 }  // namespace internal
 
+/**
+ * Type trait that checks if a type is a `multi_writer`
+ * @tparam T A type to check
+ */
 template <typename T>
-inline constexpr bool is_multi_writer_v
-    = internal::is_multi_writer<std::decay_t<T>>::value;
+struct is_multi_writer : internal::is_multi_writer<std::decay_t<T>> {};
 
-}  // namespace callbacks
-}  // namespace stan
+/**
+ * Helper variable template to check if a type is a `multi_writer`
+ */
+template <typename T>
+inline constexpr bool is_multi_writer_v = is_multi_writer<T>::value;
+
+}  // namespace stan::callbacks
+
 
 #endif

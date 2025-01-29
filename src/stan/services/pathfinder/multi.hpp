@@ -110,9 +110,9 @@ inline int pathfinder_lbfgs_multi(
     bool calculate_lp = true, bool psis_resample = true) {
   const auto start_pathfinders_time = std::chrono::steady_clock::now();
   std::atomic<size_t> lp_calls{0};
+  // Save idx of pathfinder and it's elbo for resampling later
   tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>>
       elbo_estimates;
-  // This should never allocate after this
   elbo_estimates.reserve(num_paths + 10);
   auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
                           auto&& model, auto&& rng) {
@@ -125,7 +125,7 @@ inline int pathfinder_lbfgs_multi(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
           for (int iter = r.begin(); iter < r.end(); ++iter) {
             if (psis_resample && calculate_lp) {
-              auto toss_write = [](auto&&... /* */) {};
+              auto toss_write = [](auto&&... /* x */) {};
               auto pathfinder_ret
                   = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
@@ -202,17 +202,17 @@ inline int pathfinder_lbfgs_multi(
     boost::variate_generator<stan::rng_t&, discrete_dist_t> rand_psis_idx(
         rng, discrete_dist_t(boost::iterator_range<double*>(
                  weight_vals.data(), weight_vals.data() + weight_vals.size())));
-    Eigen::Matrix<Eigen::Index, -1, 1> multi_draw_idxs(num_multi_draws);
+    Eigen::Matrix<Eigen::Index, -1, 1> psis_draw_idxs(num_multi_draws);
     for (size_t i = 0; i <= num_multi_draws - 1; ++i) {
-      multi_draw_idxs.coeffRef(i) = rand_psis_idx();
+      psis_draw_idxs.coeffRef(i) = rand_psis_idx();
     }
     /**
-     * The sort helps two things
-     * 1. For single path writer, the check for psis draw idxs is simple
-     * 2. For psis draw only, we use the same path more frequently
+     * The sort helps two main things
+     * 1. Uses the same path more frequently so it stays in memory
+     * 2. We can write single and multi path samples in one sweep
      */
-    std::sort(multi_draw_idxs.data(),
-              multi_draw_idxs.data() + multi_draw_idxs.size());
+    std::sort(psis_draw_idxs.data(),
+              psis_draw_idxs.data() + psis_draw_idxs.size());
     std::vector<std::string> param_names;
     param_names.push_back("lp_approx__");
     param_names.push_back("lp__");
@@ -220,36 +220,35 @@ inline int pathfinder_lbfgs_multi(
     model.constrained_param_names(param_names, true, true);
     parameter_writer(param_names);
     const auto uc_param_size = param_names.size() - 3;
+    // If one is null, then all are null
     if (unlikely(single_path_parameter_writer[0].is_nonnull())) {
       Eigen::VectorXd unconstrained_col;
       Eigen::VectorXd approx_samples_constrained_col;
       Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
-      Eigen::Index multi_writer_position = 0;
+      Eigen::Index psis_writer_position = 0;
       for (Eigen::Index path_idx = 0; path_idx < num_successful_paths;
            ++path_idx) {
         auto&& single_writer = single_path_parameter_writer[path_idx];
-        // If one is null, then all are null
         single_writer(param_names);
         auto&& elbo_est = elbo_estimates[path_idx].second;
         auto&& lp_draws = elbo_est.lp_mat;
         auto&& new_draws = elbo_est.repeat_draws;
         const Eigen::Index param_size = new_draws.rows();
-        const auto num_samples = new_draws.cols();
+        const Eigen::Index num_samples = new_draws.cols();
         for (Eigen::Index j = 0; j < num_samples; ++j) {
           unconstrained_col = new_draws.col(j);
-          sample_row.head(2) = lp_draws.row(j).matrix();
-          sample_row(2) = elbo_estimates[path_idx].first;
           constrain_fun(approx_samples_constrained_col, unconstrained_col,
                         model, rng);
+          sample_row.head(2) = lp_draws.row(j).matrix();
+          sample_row(2) = elbo_estimates[path_idx].first;
           sample_row.tail(uc_param_size) = approx_samples_constrained_col;
           single_writer(sample_row);
-          // If sample in multi draw, write to multi writer
-          // We can have multiples of the same idx
+          // while() since there can be multiples of the same idx
           while ((elbo_estimates[path_idx].first * num_samples + j)
-                 == multi_draw_idxs.coeff(multi_writer_position)) {
+                 == psis_draw_idxs.coeff(psis_writer_position)) {
             parameter_writer(sample_row);
             // Since idxs are sorted, just increment the next position.
-            ++multi_writer_position;
+            ++psis_writer_position;
           }
         }
         const auto end_psis_time = std::chrono::steady_clock::now();
@@ -275,14 +274,14 @@ inline int pathfinder_lbfgs_multi(
             Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(
                 param_names.size());
             for (Eigen::Index i = r.begin(); i < r.end(); ++i) {
-              const Eigen::Index draw_idx = multi_draw_idxs.coeff(i);
+              const Eigen::Index draw_idx = psis_draw_idxs.coeff(i);
               // Calculate which pathfinder the draw came from
               Eigen::Index path_num = std::floor(draw_idx / num_draws);
               auto&& elbo_est = elbo_estimates[path_num].second;
               auto&& lp_draws = elbo_est.lp_mat;
               auto&& new_draws = elbo_est.repeat_draws;
               const Eigen::Index param_size = new_draws.rows();
-              const auto num_samples = new_draws.cols();
+              const Eigen::Index num_samples = new_draws.cols();
               auto path_sample_idx = draw_idx % num_draws;
               unconstrained_col = new_draws.col(path_sample_idx);
               constrain_fun(approx_samples_constrained_col, unconstrained_col,

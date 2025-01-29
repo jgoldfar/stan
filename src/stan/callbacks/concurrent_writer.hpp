@@ -13,7 +13,7 @@ namespace stan::callbacks {
 #ifdef STAN_THREADS
 /**
  * Takes a writer and makes it thread safe via multiple queues.
- * At the first write a single busy thread is spawned to write to the writer.
+ * On construction, a single busy thread is spawned to write to the writer.
  * This class uses an `std::thread` instead of a tbb task graph because
  * of deadlocking issues. A deadlock can occur if TBB gives all threads to the
  * parallel for loop, and all threads hit an instance of max capacity. TBB can
@@ -23,11 +23,17 @@ namespace stan::callbacks {
  */
 template <typename Writer>
 struct concurrent_writer {
+  // A reference to the writer to write to
   std::reference_wrapper<Writer> writer;
+  // Queue for string messages
   tbb::concurrent_bounded_queue<std::string> str_messages_{};
+  // Queue for vector of strings messages
   tbb::concurrent_bounded_queue<std::vector<std::string>> vec_str_messages_{};
+  // Queue for Eigen vector messages
   tbb::concurrent_bounded_queue<Eigen::RowVectorXd> eigen_messages_{};
+  // Flag to stop the writing thread once all queues are empty
   bool continue_writing_{true};
+  // The writing thread
   std::thread thread_;
   /**
    * Constructs a concurrent writer from a writer and spins up a thread for
@@ -72,22 +78,30 @@ struct concurrent_writer {
         vec_str_messages_.push(t);
       }
     } else if constexpr (std::is_same_v<T, std::string>) {
-      str_messages_.push(t);
-    } else if constexpr (stan::is_eigen_row_vector<T>::value) {
-      eigen_messages_.push(t);
-    } else if constexpr (stan::is_eigen_col_vector<T>::value) {
-      eigen_messages_.push(t.transpose());
+      str_messages_.push(std::forward<T>(t));
+    } else if constexpr (stan::is_eigen_row_vector<T>::value || stan::is_eigen_col_vector<T>::value) {
+      eigen_messages_.push(std::forward<T>(t));
     } else {
-      static_assert(1, "Unsupported type passed to concurrent_writer");
+      static_assert(1, "Unsupported type passed to concurrent_writer. "
+      "This is an internal error. Please file an issue on the stan github repo.");
     }
   }
+  /**
+   * Writes a comment prefix to the writer.
+   */
   void operator()() { str_messages_.push(writer.get().comment_prefix()); }
+  /**
+   * Waits till all writes are finished on the thread
+   */
   void wait() {
     continue_writing_ = false;
     thread_.join();
   }
 };
 #else
+/**
+ * When STAN_THREADS is not defined, the concurrent writer is just a wrapper
+ */
 template <typename Writer>
 struct concurrent_writer {
   std::reference_wrapper<Writer> writer;

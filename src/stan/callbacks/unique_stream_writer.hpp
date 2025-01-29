@@ -150,13 +150,11 @@ class unique_stream_writer final : public writer {
    */
   template <class T>
   void write_vector(const std::vector<T>& v) {
-    std::stringstream ss;
-    ss.copyfmt(*output_);
-    if (output_ == nullptr)
-      return;
-    if (v.empty()) {
+    if (output_ == nullptr || v.empty()) {
       return;
     }
+    std::stringstream ss;
+    ss.copyfmt(*output_);
     auto last = v.end();
     --last;
     for (auto it = v.begin(); it != last; ++it) {
