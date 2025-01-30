@@ -49,8 +49,7 @@ class writer {
   /**
    * Checks if stream is valid.
    */
-  virtual bool is_nonnull() const noexcept { return false; }
-  virtual const char* comment_prefix() const noexcept { return "# "; }
+  virtual bool is_valid() const noexcept { return false; }
 
   /**
    * Writes multiple rows and columns of values in csv format.

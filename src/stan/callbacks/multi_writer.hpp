@@ -49,21 +49,15 @@ class multi_writer {
   /**
    * Checks if all underlying writers are nonnull.
    */
-  inline bool is_nonnull() const noexcept {
+  inline bool is_valid() const noexcept {
     return stan::math::apply(
-        [](auto&&... output) { return (output.is_nonnull() && ...); }, output_);
+        [](auto&&... output) { return (output.is_valid() && ...); }, output_);
   }
 
   /**
    * Get the tuple of underlying streams
    */
   inline auto& get_stream() noexcept { return output_; }
-  /**
-   * Assuming all streams have the same comment prefix, return the first comment prefix.
-   */
-  const char* comment_prefix() const noexcept {
-    return std::get<0>(output_).comment_prefix();
-  }
 
  private:
   // Output streams

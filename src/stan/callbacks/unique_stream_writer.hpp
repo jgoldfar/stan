@@ -117,11 +117,7 @@ class unique_stream_writer final : public writer {
   /**
    * Checks if stream is valid.
    */
-  bool is_nonnull() const noexcept { return output_ != nullptr; }
-
-  const char* comment_prefix() const noexcept {
-    return comment_prefix_.c_str();
-  }
+  bool is_valid() const noexcept { return output_ != nullptr; }
 
  private:
   /**

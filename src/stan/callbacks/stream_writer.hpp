@@ -71,13 +71,7 @@ class stream_writer : public writer {
   /**
    * Checks if stream is valid.
    */
-  virtual bool is_nonnull() const noexcept { return output_.good(); }
-  /**
-   * Return the comment prefix
-   */
-  const char* comment_prefix() const noexcept {
-    return comment_prefix_.c_str();
-  }
+  virtual bool is_valid() const noexcept { return output_.good(); }
 
  private:
   /**
