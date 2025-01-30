@@ -22,7 +22,8 @@ class multi_writer {
  public:
   /**
    * Constructs a multi stream writer from a parameter pack of writers.
-   * @tparam Args A parameter pack of writers. Should be the same type as `Writers`
+   * @tparam Args A parameter pack of writers. Should be the same type as
+   * `Writers`
    * @param[in, out] args A parameter pack of writers
    */
   template <typename... Args>
@@ -86,6 +87,5 @@ template <typename T>
 inline constexpr bool is_multi_writer_v = is_multi_writer<T>::value;
 
 }  // namespace stan::callbacks
-
 
 #endif
