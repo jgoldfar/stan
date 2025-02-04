@@ -54,11 +54,13 @@ struct concurrent_writer {
              || !(str_messages_.empty() && vec_str_messages_.empty()
                   && eigen_messages_.empty() && null_writes_queued == 0)) {
         while (null_writes_queued > 0) {
-          auto num_null_writes = null_writes_queued.load(std::memory_order_relaxed);
+          auto num_null_writes
+              = null_writes_queued.load(std::memory_order_relaxed);
           for (int i = 0; i < num_null_writes; ++i) {
             writer();
           }
-          null_writes_queued.fetch_sub(num_null_writes, std::memory_order_relaxed);
+          null_writes_queued.fetch_sub(num_null_writes,
+                                       std::memory_order_relaxed);
         }
         while (str_messages_.try_pop(str)) {
           writer(str);
