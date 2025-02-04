@@ -103,11 +103,11 @@ class unique_stream_writer final : public writer {
    * @param[in] values A column vector of values.
    */
   virtual void operator()(const Eigen::Matrix<double, -1, 1>& values) {
-      if (output_ == nullptr) {
-        return;
-      }
-      *output_ << values.transpose().format(CommaInitFmt);
+    if (output_ == nullptr) {
+      return;
     }
+    *output_ << values.transpose().format(CommaInitFmt);
+  }
 
   /**
    * Write a row of values in csv format
@@ -118,12 +118,11 @@ class unique_stream_writer final : public writer {
    * @param[in] values A row vector of values.
    */
   virtual void operator()(const Eigen::Matrix<double, 1, -1>& values) {
-      if (output_ == nullptr) {
-        return;
-      }
-      *output_ << values.format(CommaInitFmt);
+    if (output_ == nullptr) {
+      return;
     }
-
+    *output_ << values.format(CommaInitFmt);
+  }
 
   /**
    * Writes the comment_prefix to the stream followed by a newline.

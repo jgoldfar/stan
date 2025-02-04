@@ -61,8 +61,7 @@ class writer {
    * parameters in the rows and samples in the columns. The matrix is then
    * transposed for the output.
    */
-  virtual void operator()(
-      const Eigen::Matrix<double, -1, -1>& values) {}
+  virtual void operator()(const Eigen::Matrix<double, -1, -1>& values) {}
   /**
    * Write a row of values in csv format.
    *
@@ -71,8 +70,7 @@ class writer {
    *
    * @param[in] values A column vector of values.
    */
-  virtual void operator()(
-      const Eigen::Matrix<double, -1, 1>& values) {}
+  virtual void operator()(const Eigen::Matrix<double, -1, 1>& values) {}
 
   /**
    * Write a row of values in csv format
@@ -82,8 +80,7 @@ class writer {
    *
    * @param[in] values A row vector of values.
    */
-  virtual void operator()(
-      const Eigen::Matrix<double, 1, -1>& values) {}
+  virtual void operator()(const Eigen::Matrix<double, 1, -1>& values) {}
 };
 
 }  // namespace callbacks
