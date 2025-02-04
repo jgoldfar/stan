@@ -1,6 +1,9 @@
 #ifndef STAN_CALLBACKS_TEE_WRITER_HPP
 #define STAN_CALLBACKS_TEE_WRITER_HPP
 
+#include <stan/math/prim/fun/Eigen.hpp>
+#include <stan/math/prim/functor/apply.hpp>
+#include <stan/math/prim/functor/for_each.hpp>
 #include <stan/callbacks/writer.hpp>
 #include <ostream>
 #include <vector>

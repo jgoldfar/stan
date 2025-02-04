@@ -108,16 +108,6 @@ inline int pathfinder_lbfgs_multi(
     ParamWriter& parameter_writer, DiagnosticWriter& diagnostic_writer,
     bool calculate_lp = true, bool psis_resample = true) {
   const auto start_pathfinders_time = std::chrono::steady_clock::now();
-  std::atomic<size_t> lp_calls{0};
-  // Save idx of pathfinder and it's elbo for resampling later
-  tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>>
-      elbo_estimates;
-  elbo_estimates.reserve(num_paths + 10);
-  auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
-                          auto&& model, auto&& rng) {
-    model.write_array(rng, unconstrained_draws, constrained_draws);
-    return constrained_draws;
-  };
   // All work is done in the parallel_for loop
   if (!psis_resample || !calculate_lp) {
     try {
@@ -157,10 +147,19 @@ inline int pathfinder_lbfgs_multi(
     // Writes are done in loop, so just return
     return error_codes::OK;
   }
+  // Save idx of pathfinder and it's elbo for resampling later
+  tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>>
+    elbo_estimates;
+  elbo_estimates.reserve(num_paths + 10);
+  auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
+                          auto&& model, auto&& rng) {
+    model.write_array(rng, unconstrained_draws, constrained_draws);
+    return constrained_draws;
+  };
   try {
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
-          auto toss_write = [](auto&&... /* x */) {};
+          auto non_writer = [](auto&&... /* x */) {};
           for (int iter = r.begin(); iter < r.end(); ++iter) {
             auto pathfinder_ret
                 = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
@@ -168,10 +167,9 @@ inline int pathfinder_lbfgs_multi(
                     init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
                     tol_grad, tol_rel_grad, tol_param, num_iterations,
                     num_elbo_draws, num_draws, save_iterations, refresh,
-                    interrupt, logger, init_writers[iter], toss_write,
+                    interrupt, logger, init_writers[iter], non_writer,
                     single_path_diagnostic_writer[iter], calculate_lp,
                     psis_resample);
-            lp_calls += std::get<2>(pathfinder_ret);
             if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
               logger.error(std::string("Pathfinder iteration: ")
                            + std::to_string(iter) + " failed.");

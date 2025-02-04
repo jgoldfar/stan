@@ -455,16 +455,14 @@ inline taylor_approx_t taylor_approximation(
  * @tparam EigMat A type inheriting from `Eigen::DenseBase`
  * @tparam EigVec A type inheriting from `Eigen::DenseBase` with one column
  * defined at compile time
- * @return If `ReturnLpSamples` is `true`, returns a tuple with the return code,
- * the elbo estimate, and the number of log probability calls. If `false`, only
+ * @return If `ReturnLpSamples` is `true`, returns a pair with the return code and
+ * the elbo estimate. If `false`, only
  * returns the return code.
  */
 template <bool ReturnLpSamples, typename EigVec>
-inline auto ret_pathfinder(int return_code, EigVec&& elbo_est,
-                           const std::size_t lp_calls) noexcept {
+inline auto ret_pathfinder(int return_code, EigVec&& elbo_est) noexcept {
   if constexpr (ReturnLpSamples) {
-    return std::make_tuple(return_code, std::forward<EigVec>(elbo_est),
-                           lp_calls);
+    return std::make_pair(return_code, std::forward<EigVec>(elbo_est));
   } else {
     return return_code;
   }
@@ -586,8 +584,8 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, ConstrainFun&& constrain_fun,
  * probability calculations will be `NA` and psis resampling will not be
  * performed. Setting this parameter to `false` will also set all of the lp
  * ratios to `NaN`.
- * @return If `ReturnLpSamples` is `true`, returns a tuple with the return code,
- * the elbo estimate, and the number of log probability calls.  If `false`, only
+ * @return If `ReturnLpSamples` is `true`, returns a pair with the return code and
+ * the elbo estimate.  If `false`, only
  * returns an error code `error_codes::OK` if successful,
  * `error_codes::SOFTWARE` or `error_codes::CONFIG` for failures
  */
@@ -614,7 +612,7 @@ inline auto pathfinder_lbfgs_single(
   } catch (const std::exception& e) {
     logger.error(path_num + e.what());
     return internal::ret_pathfinder<ReturnLpSamples>(error_codes::SOFTWARE,
-                                                     internal::elbo_est_t{}, 0);
+                                                     internal::elbo_est_t{});
   }
 
   const auto num_parameters = cont_vector.size();
@@ -817,7 +815,7 @@ inline auto pathfinder_lbfgs_single(
       } else {
         logger.error(e.what());
         return internal::ret_pathfinder<ReturnLpSamples>(
-            error_codes::SOFTWARE, internal::elbo_est_t{}, num_evals);
+            error_codes::SOFTWARE, internal::elbo_est_t{});
       }
     }
   }
@@ -832,8 +830,7 @@ inline auto pathfinder_lbfgs_single(
           prefix_err_msg
           + " Optimization failed to start, pathfinder cannot be run.");
       return internal::ret_pathfinder<ReturnLpSamples>(
-          error_codes::SOFTWARE, internal::elbo_est_t{},
-          num_evals + lbfgs.grad_evals());
+          error_codes::SOFTWARE, internal::elbo_est_t{});
     } else {
       logger.warn(prefix_err_msg +
           " Stan will still attempt pathfinder but may fail or produce "
@@ -845,7 +842,7 @@ inline auto pathfinder_lbfgs_single(
         "Failure: None of the LBFGS iterations completed "
         "successfully");
     return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::SOFTWARE, internal::elbo_est_t{}, num_evals);
+        error_codes::SOFTWARE, internal::elbo_est_t{});
   } else {
     if (refresh != 0) {
       logger.info(path_num + "Best Iter: [" + std::to_string(best_iteration)
@@ -858,7 +855,7 @@ inline auto pathfinder_lbfgs_single(
         lp_fun, constrain_fun, rng, taylor_approx_best, num_draws,
         taylor_approx_best.alpha, path_num, logger, calculate_lp);
     return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::OK, std::move(est_draws), num_evals + est_draws.fn_calls);
+        error_codes::OK, std::move(est_draws));
   } else {
     std::vector<std::string> names;
     names.push_back("lp_approx__");
@@ -951,7 +948,11 @@ inline auto pathfinder_lbfgs_single(
     const double pathfinder_delta_time = stan::services::util::duration_diff(
         start_pathfinder_time, end_pathfinder_time);
     // For multi pathfinder, multi would write multiple end times
-    if constexpr (stan::callbacks::is_tee_writer_v<ParamWriter>) {
+    if constexpr (ReturnLpSamples) {
+      static_assert(stan::callbacks::is_tee_writer_v<ParamWriter>,
+      "ReturnLpSamples is true, but the parameter_writer is not a tee_writer! "
+      "Multi pathfinder assumes we use a tee writer here, if you intend to change this "
+      "please make it clear why.");
       auto&& single_stream = std::get<0>(parameter_writer.get_stream());
       single_stream();
       std::string pathfinder_time_str = "Elapsed Time: ";
@@ -960,7 +961,7 @@ inline auto pathfinder_lbfgs_single(
       single_stream(pathfinder_time_str);
       single_stream();
       return internal::ret_pathfinder<ReturnLpSamples>(
-          error_codes::OK, internal::elbo_est_t{}, num_evals);
+          error_codes::OK, internal::elbo_est_t{});
     } else {
       parameter_writer();
       std::string pathfinder_time_str = "Elapsed Time: ";
@@ -969,7 +970,7 @@ inline auto pathfinder_lbfgs_single(
       parameter_writer(pathfinder_time_str);
       parameter_writer();
       return internal::ret_pathfinder<ReturnLpSamples>(
-          error_codes::OK, internal::elbo_est_t{}, num_evals);
+          error_codes::OK, internal::elbo_est_t{});
     }
   }
 }
