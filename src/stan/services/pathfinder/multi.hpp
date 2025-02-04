@@ -143,12 +143,11 @@ inline int pathfinder_lbfgs_multi(
                       init_writers[iter], multi_param_writer,
                       single_path_diagnostic_writer[iter], calculate_lp,
                       psis_resample);
-              if (pathfinder_ret.first != error_codes::OK) {
+              if (pathfinder_ret != error_codes::OK) {
                 logger.error(std::string("Pathfinder iteration: ")
                              + std::to_string(iter) + " failed.");
                 return;
               }
-              lp_calls += pathfinder_ret.second;
             }
           });
       safe_write.wait();
