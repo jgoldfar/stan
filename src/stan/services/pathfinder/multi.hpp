@@ -149,7 +149,7 @@ inline int pathfinder_lbfgs_multi(
   }
   // Save idx of pathfinder and it's elbo for resampling later
   tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>>
-    elbo_estimates;
+      elbo_estimates;
   elbo_estimates.reserve(num_paths + 10);
   auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
                           auto&& model, auto&& rng) {
