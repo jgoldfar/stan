@@ -587,9 +587,9 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, ConstrainFun&& constrain_fun,
  * performed. Setting this parameter to `false` will also set all of the lp
  * ratios to `NaN`.
  * @return If `ReturnLpSamples` is `true`, returns a tuple with the return code,
- * the elbo estimate, and the number of log probability calls.  If `false`, only returns an
- * error code `error_codes::OK` if successful, `error_codes::SOFTWARE`
- * or `error_codes::CONFIG` for failures
+ * the elbo estimate, and the number of log probability calls.  If `false`, only
+ * returns an error code `error_codes::OK` if successful,
+ * `error_codes::SOFTWARE` or `error_codes::CONFIG` for failures
  */
 template <bool ReturnLpSamples = false, class Model, typename DiagnosticWriter,
           typename ParamWriter>
@@ -613,8 +613,8 @@ inline auto pathfinder_lbfgs_single(
                                           logger, init_writer);
   } catch (const std::exception& e) {
     logger.error(path_num + e.what());
-    return internal::ret_pathfinder<ReturnLpSamples>(
-        error_codes::SOFTWARE, internal::elbo_est_t{}, 0);
+    return internal::ret_pathfinder<ReturnLpSamples>(error_codes::SOFTWARE,
+                                                     internal::elbo_est_t{}, 0);
   }
 
   const auto num_parameters = cont_vector.size();
