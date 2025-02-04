@@ -305,8 +305,6 @@ inline int pathfinder_lbfgs_multi(
           auto&& elbo_est = elbo_estimates[path_num].second;
           auto&& lp_draws = elbo_est.lp_mat;
           auto&& new_draws = elbo_est.repeat_draws;
-          const Eigen::Index param_size = new_draws.rows();
-          const Eigen::Index num_samples = new_draws.cols();
           auto path_sample_idx = draw_idx % num_draws;
           unconstrained_col = new_draws.col(path_sample_idx);
           constrain_fun(approx_samples_constrained_col, unconstrained_col,

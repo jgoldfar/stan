@@ -1,10 +1,12 @@
 #include <stan/callbacks/json_writer.hpp>
 #include <stan/callbacks/stream_writer.hpp>
+#include <stan/callbacks/unique_stream_writer.hpp>
 #include <stan/callbacks/json_writer.hpp>
 #include <stan/math.hpp>
 #include <stan/io/array_var_context.hpp>
 #include <stan/io/empty_var_context.hpp>
 #include <stan/io/json/json_data.hpp>
+#include <stan/io/stan_csv_reader.hpp>
 #include <stan/services/pathfinder/multi.hpp>
 #include <test/test-models/good/services/eight_schools.hpp>
 #include <test/unit/services/instrumented_callbacks.hpp>
@@ -141,6 +143,80 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   all_sd_vals.row(2) = sd_vals - r_sd_vals;
   for (Eigen::Index i = 0; i < all_mean_vals.cols(); i++) {
     EXPECT_NEAR(0, all_sd_vals(2, i), 2);
+  }
+}
+
+TEST_F(ServicesPathfinderEightSchools, multi_output) {
+  constexpr unsigned int seed = 0;
+  constexpr unsigned int stride_id = 1;
+  constexpr double init_radius = 1;
+  constexpr size_t num_multi_draws = 10000;
+  constexpr size_t num_paths = 16;
+  constexpr double num_elbo_draws = 1000;
+  constexpr double num_draws = 10000;
+  constexpr int history_size = 10;
+  constexpr double init_alpha = 1;
+  constexpr double tol_obj = 1e-12;
+  constexpr double tol_rel_obj = 1000000;
+  constexpr double tol_grad = 1e-12;
+  constexpr double tol_rel_grad = 10000000;
+  constexpr double tol_param = 1e-12;
+  constexpr int num_iterations = 2000;
+  constexpr int refresh = 1;
+  constexpr bool save_iterations = false;
+  constexpr bool calculate_lp = true;
+  constexpr bool resample = true;
+  std::unique_ptr<std::ostream> empty_ostream(nullptr);
+  stan::test::test_logger logger(std::move(empty_ostream));
+  using unique_string_writer = stan::callbacks::unique_stream_writer<std::stringstream>;
+  std::vector<unique_string_writer> single_path_parameter_writer;
+  unique_string_writer parameter_writer{std::make_unique<std::stringstream>(), "# "};
+  for (int i = 0; i < num_paths; ++i) {
+    single_path_parameter_writer.emplace_back(std::make_unique<std::stringstream>(), "# ");
+  }
+  std::vector<stan::callbacks::json_writer<std::stringstream>>
+      single_path_diagnostic_writer(num_paths);
+  std::vector<std::unique_ptr<decltype(init_init_context())>> single_path_inits;
+  for (int i = 0; i < num_paths; ++i) {
+    single_path_inits.emplace_back(
+        std::make_unique<decltype(init_init_context())>(init_init_context()));
+  }
+  stan::test::mock_callback callback;
+  int return_code = stan::services::pathfinder::pathfinder_lbfgs_multi(
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
+      init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+      num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
+      save_iterations, refresh, callback, logger,
+      std::vector<stan::callbacks::stream_writer>(num_paths, init),
+      single_path_parameter_writer, single_path_diagnostic_writer, parameter_writer,
+      diagnostics, calculate_lp, resample);
+
+  auto str = parameter_writer.get_stream().str();
+  {
+    auto&& streamer = parameter_writer.get_stream();
+    std::stringstream tmp_stream;
+    auto stan_data = stan::io::stan_csv_reader::parse(streamer, &tmp_stream);
+    EXPECT_FALSE(str.rfind("Elapsed Time:") == std::string::npos);
+    EXPECT_FALSE(str.rfind("(Pathfinders)") == std::string::npos);
+    EXPECT_FALSE(str.rfind("(PSIS)") == std::string::npos);
+    EXPECT_FALSE(str.rfind("(Total)") == std::string::npos);
+    EXPECT_EQ(stan_data.samples.rows(), 10000);
+    EXPECT_EQ(stan_data.samples.cols(), 21);
+  }
+  int sentinal = 0;
+  for (auto&& single_param : single_path_parameter_writer) {
+    auto&& streamer = single_param.get_stream();
+    auto&& str = streamer.str();
+    std::stringstream tmp_stream;
+    auto stan_data = stan::io::stan_csv_reader::parse(streamer, &tmp_stream);
+    EXPECT_FALSE(str.rfind("Elapsed Time:") == std::string::npos);
+    EXPECT_FALSE(str.rfind("(Pathfinder)") == std::string::npos);
+    // Should single path have total time?
+    // EXPECT_FALSE(str.rfind("(Total)") == std::string::npos);
+    EXPECT_EQ(stan_data.samples.rows(), 10000);
+    EXPECT_EQ(stan_data.samples.cols(), 21);
+    EXPECT_TRUE((stan_data.samples.col(2).array() == sentinal).all());
+    sentinal++;
   }
 }
 

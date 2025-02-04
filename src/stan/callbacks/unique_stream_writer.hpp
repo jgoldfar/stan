@@ -88,11 +88,42 @@ class unique_stream_writer final : public writer {
    * parameters in the rows and samples in the columns. The matrix is then
    * transposed for the output.
    */
-  void operator()(const Eigen::Ref<Eigen::Matrix<double, -1, -1>>& values) {
-    if (output_ == nullptr)
+  void operator()(const Eigen::Matrix<double, -1, -1>& values) {
+    if (output_ == nullptr) {
       return;
+    }
     *output_ << values.transpose().format(CommaInitFmt);
   }
+  /**
+   * Write a row of values in csv format.
+   *
+   * Note: the precision of the output is determined by the settings
+   *  of the stream on construction.
+   *
+   * @param[in] values A column vector of values.
+   */
+  virtual void operator()(const Eigen::Matrix<double, -1, 1>& values) {
+      if (output_ == nullptr) {
+        return;
+      }
+      *output_ << values.transpose().format(CommaInitFmt);
+    }
+
+  /**
+   * Write a row of values in csv format
+   *
+   * Note: the precision of the output is determined by the settings
+   *  of the stream on construction.
+   *
+   * @param[in] values A row vector of values.
+   */
+  virtual void operator()(const Eigen::Matrix<double, 1, -1>& values) {
+      if (output_ == nullptr) {
+        return;
+      }
+      *output_ << values.format(CommaInitFmt);
+    }
+
 
   /**
    * Writes the comment_prefix to the stream followed by a newline.

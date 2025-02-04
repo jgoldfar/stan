@@ -62,7 +62,28 @@ class writer {
    * transposed for the output.
    */
   virtual void operator()(
-      const Eigen::Ref<Eigen::Matrix<double, -1, -1>>& values) {}
+      const Eigen::Matrix<double, -1, -1>& values) {}
+  /**
+   * Write a row of values in csv format.
+   *
+   * Note: the precision of the output is determined by the settings
+   *  of the stream on construction.
+   *
+   * @param[in] values A column vector of values.
+   */
+  virtual void operator()(
+      const Eigen::Matrix<double, -1, 1>& values) {}
+
+  /**
+   * Write a row of values in csv format
+   *
+   * Note: the precision of the output is determined by the settings
+   *  of the stream on construction.
+   *
+   * @param[in] values A row vector of values.
+   */
+  virtual void operator()(
+      const Eigen::Matrix<double, 1, -1>& values) {}
 };
 
 }  // namespace callbacks
