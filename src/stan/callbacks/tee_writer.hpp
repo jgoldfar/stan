@@ -52,11 +52,8 @@ class tee_writer final : public writer {
   /**
    * Checks if both streams are valid.
    */
-  virtual bool is_nonnull() const noexcept {
-    return writer1_.is_nonnull() && writer2_.is_nonnull();
-  }
-  const char* comment_prefix() const noexcept {
-    return writer1_.comment_prefix();
+  virtual bool is_valid() const noexcept {
+    return writer1_.is_valid() && writer2_.is_valid();
   }
 
  private:
