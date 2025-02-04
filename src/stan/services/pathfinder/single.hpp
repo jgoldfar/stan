@@ -4,7 +4,7 @@
 #include <stan/callbacks/interrupt.hpp>
 #include <stan/callbacks/logger.hpp>
 #include <stan/callbacks/writer.hpp>
-#include <stan/callbacks/multi_writer.hpp>
+#include <stan/callbacks/tee_writer.hpp>
 #include <stan/io/var_context.hpp>
 #include <stan/optimization/bfgs.hpp>
 #include <stan/optimization/lbfgs_update.hpp>
@@ -951,7 +951,7 @@ inline auto pathfinder_lbfgs_single(
     const double pathfinder_delta_time = stan::services::util::duration_diff(
         start_pathfinder_time, end_pathfinder_time);
     // For multi pathfinder, multi would write multiple end times
-    if constexpr (stan::callbacks::is_multi_writer_v<ParamWriter>) {
+    if constexpr (stan::callbacks::is_tee_writer_v<ParamWriter>) {
       auto&& single_stream = std::get<0>(parameter_writer.get_stream());
       single_stream();
       std::string pathfinder_time_str = "Elapsed Time: ";
