@@ -20,8 +20,7 @@ class tee_writer {
    * Constructs a multi stream writer from a parameter pack of writers.
    * @param[in, out] args A parameter pack of writers
    */
-  explicit tee_writer(Writers&... args)
-      : output_(args...) {}
+  explicit tee_writer(Writers&... args) : output_(args...) {}
 
   tee_writer() = default;
 
