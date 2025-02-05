@@ -4,7 +4,6 @@
 #include <boost/algorithm/string.hpp>
 #include <stan/math/prim.hpp>
 #include <cctype>
-#include <charconv>
 #include <istream>
 #include <iostream>
 #include <sstream>
@@ -335,10 +334,13 @@ class stan_csv_reader {
         for (int col = 0; col < cols; col++) {
           std::getline(ls, line, ',');
           boost::trim(line);
-          auto [ptr, ec]
-              = std::from_chars(line.data(), line.data() + line.size(),
-                                samples.coeffRef(row, col));
-          if (ec != std::errc()) {
+          try {
+            samples(row, col) = static_cast<double>(std::stold(line));
+            // If the value read is out of the range of representable values by a long double
+          } catch (const std::out_of_range& e) {
+            samples(row, col) = std::numeric_limits<double>::quiet_NaN();
+            // If no conversion could be performed, an invalid_argument exception is thrown.
+          } catch (const std::invalid_argument& e) {
             samples(row, col) = std::numeric_limits<double>::quiet_NaN();
           }
         }
