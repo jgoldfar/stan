@@ -68,7 +68,7 @@ class stream_writer : public writer {
     output_ << comment_prefix_ << message << std::endl;
   }
 
-    /**
+  /**
    * Writes multiple rows and columns of values in csv format.
    *
    * Note: the precision of the output is determined by the settings
@@ -90,8 +90,8 @@ class stream_writer : public writer {
    * @param[in] values A column vector of values.
    */
   virtual void operator()(const Eigen::Matrix<double, -1, 1>& values) {
-      output_ << values.transpose().format(CommaInitFmt);
-    }
+    output_ << values.transpose().format(CommaInitFmt);
+  }
 
   /**
    * Write a row of values in csv format
@@ -102,9 +102,8 @@ class stream_writer : public writer {
    * @param[in] values A row vector of values.
    */
   virtual void operator()(const Eigen::Matrix<double, 1, -1>& values) {
-      output_ << values.format(CommaInitFmt);
-    }
-
+    output_ << values.format(CommaInitFmt);
+  }
 
   /**
    * Checks if stream is valid.
@@ -112,7 +111,7 @@ class stream_writer : public writer {
   virtual bool is_valid() const noexcept { return output_.good(); }
 
  private:
-   /**
+  /**
    * Comma formatter for writing Eigen matrices
    */
   Eigen::IOFormat CommaInitFmt{

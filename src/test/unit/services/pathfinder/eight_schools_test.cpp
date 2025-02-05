@@ -193,11 +193,14 @@ TEST_F(ServicesPathfinderEightSchools, multi_and_single_psis_output) {
   constexpr bool resample = true;
   std::unique_ptr<std::ostream> empty_ostream(nullptr);
   stan::test::test_logger logger(std::move(empty_ostream));
-  using unique_string_writer = stan::callbacks::unique_stream_writer<std::stringstream>;
+  using unique_string_writer
+      = stan::callbacks::unique_stream_writer<std::stringstream>;
   std::vector<unique_string_writer> single_path_parameter_writer;
-  unique_string_writer parameter_writer{std::make_unique<std::stringstream>(), "# "};
+  unique_string_writer parameter_writer{std::make_unique<std::stringstream>(),
+                                        "# "};
   for (int i = 0; i < num_paths; ++i) {
-    single_path_parameter_writer.emplace_back(std::make_unique<std::stringstream>(), "# ");
+    single_path_parameter_writer.emplace_back(
+        std::make_unique<std::stringstream>(), "# ");
   }
   std::vector<stan::callbacks::json_writer<std::stringstream>>
       single_path_diagnostic_writer(num_paths);
@@ -213,8 +216,8 @@ TEST_F(ServicesPathfinderEightSchools, multi_and_single_psis_output) {
       num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
       save_iterations, refresh, callback, logger,
       std::vector<stan::callbacks::stream_writer>(num_paths, init),
-      single_path_parameter_writer, single_path_diagnostic_writer, parameter_writer,
-      diagnostics, calculate_lp, resample);
+      single_path_parameter_writer, single_path_diagnostic_writer,
+      parameter_writer, diagnostics, calculate_lp, resample);
 
   {
     auto&& streamer = parameter_writer.get_stream();
