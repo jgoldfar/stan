@@ -107,7 +107,7 @@ inline int pathfinder_lbfgs_multi(
     std::vector<SingleDiagnosticWriter>& single_path_diagnostic_writer,
     ParamWriter& parameter_writer, DiagnosticWriter& diagnostic_writer,
     bool calculate_lp = true, bool psis_resample = true) {
-    using stan::services::pathfinder::internal::write_times;
+  using stan::services::pathfinder::internal::write_times;
   const auto start_pathfinders_time = std::chrono::steady_clock::now();
   std::vector<std::string> param_names;
   param_names.push_back("lp_approx__");
@@ -130,7 +130,8 @@ inline int pathfinder_lbfgs_multi(
               multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
-                  = stan::services::pathfinder::pathfinder_lbfgs_single<false, true>(
+                  = stan::services::pathfinder::pathfinder_lbfgs_single<false,
+                                                                        true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
                       init_radius, history_size, init_alpha, tol_obj,
                       tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
@@ -172,7 +173,8 @@ inline int pathfinder_lbfgs_multi(
           auto non_writer = [](auto&&... /* x */) {};
           for (int iter = r.begin(); iter < r.end(); ++iter) {
             auto pathfinder_ret
-                = stan::services::pathfinder::pathfinder_lbfgs_single<true, true>(
+                = stan::services::pathfinder::pathfinder_lbfgs_single<true,
+                                                                      true>(
                     model, *(init[iter]), random_seed, stride_id + iter,
                     init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
                     tol_grad, tol_rel_grad, tol_param, num_iterations,
@@ -265,7 +267,8 @@ inline int pathfinder_lbfgs_multi(
     }
     double psis_delta_time = stan::services::util::duration_diff(
         start_psis_time, std::chrono::steady_clock::now());
-    write_times<true>(parameter_writer, pathfinders_delta_time, psis_delta_time);
+    write_times<true>(parameter_writer, pathfinders_delta_time,
+                      psis_delta_time);
     return error_codes::OK;
   }
   stan::callbacks::concurrent_writer safe_write{parameter_writer};

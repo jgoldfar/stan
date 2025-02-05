@@ -147,7 +147,9 @@ class unique_stream_writer final : public writer {
   /**
    * Checks if stream is valid.
    */
-  bool is_valid() const noexcept { return output_ != nullptr && (*output_).good(); }
+  bool is_valid() const noexcept {
+    return output_ != nullptr && (*output_).good();
+  }
 
  private:
   /**

@@ -335,7 +335,9 @@ class stan_csv_reader {
         for (int col = 0; col < cols; col++) {
           std::getline(ls, line, ',');
           boost::trim(line);
-          auto [ptr, ec] = std::from_chars(line.data(), line.data() + line.size(), samples.coeffRef(row, col));
+          auto [ptr, ec]
+              = std::from_chars(line.data(), line.data() + line.size(),
+                                samples.coeffRef(row, col));
           if (ec != std::errc()) {
             samples(row, col) = std::numeric_limits<double>::quiet_NaN();
           }

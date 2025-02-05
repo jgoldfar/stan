@@ -539,20 +539,20 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, ConstrainFun&& constrain_fun,
  * @param psis_delta_time Time taken for PSIS
  */
 template <bool MultiPathfinder, typename ParamWriter>
-inline void write_times(ParamWriter&& parameter_writer, double pathfinders_delta_time,
-                      double psis_delta_time) {
+inline void write_times(ParamWriter&& parameter_writer,
+                        double pathfinders_delta_time, double psis_delta_time) {
   parameter_writer();
   const auto time_header = std::string("Elapsed Time: ");
-  std::string optim_time_str = time_header
-                                + std::to_string(pathfinders_delta_time)
-                                + std::string(" seconds") +
-                                (MultiPathfinder ? " (Pathfinders)" : " (Pathfinder)");
+  std::string optim_time_str
+      = time_header + std::to_string(pathfinders_delta_time)
+        + std::string(" seconds")
+        + (MultiPathfinder ? " (Pathfinders)" : " (Pathfinder)");
   parameter_writer(optim_time_str);
   if (psis_delta_time != 0) {
-  std::string psis_time_str = std::string(time_header.size(), ' ')
-                              + std::to_string(psis_delta_time)
-                              + " seconds (PSIS)";
-  parameter_writer(psis_time_str);
+    std::string psis_time_str = std::string(time_header.size(), ' ')
+                                + std::to_string(psis_delta_time)
+                                + " seconds (PSIS)";
+    parameter_writer(psis_time_str);
   }
   std::string total_time_str
       = std::string(time_header.size(), ' ')
