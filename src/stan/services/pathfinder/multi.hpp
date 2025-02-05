@@ -107,7 +107,14 @@ inline int pathfinder_lbfgs_multi(
     std::vector<SingleDiagnosticWriter>& single_path_diagnostic_writer,
     ParamWriter& parameter_writer, DiagnosticWriter& diagnostic_writer,
     bool calculate_lp = true, bool psis_resample = true) {
+    using stan::services::pathfinder::internal::write_times;
   const auto start_pathfinders_time = std::chrono::steady_clock::now();
+  std::vector<std::string> param_names;
+  param_names.push_back("lp_approx__");
+  param_names.push_back("lp__");
+  param_names.push_back("pathfinder__");
+  model.constrained_param_names(param_names, true, true);
+  parameter_writer(param_names);
   // All work is done in the parallel_for loop
   if (!psis_resample || !calculate_lp) {
     try {
@@ -123,7 +130,7 @@ inline int pathfinder_lbfgs_multi(
               multi_writer_t multi_param_writer(
                   single_path_parameter_writer[iter], safe_write);
               auto pathfinder_ret
-                  = stan::services::pathfinder::pathfinder_lbfgs_single<false>(
+                  = stan::services::pathfinder::pathfinder_lbfgs_single<false, true>(
                       model, *(init[iter]), random_seed, stride_id + iter,
                       init_radius, history_size, init_alpha, tol_obj,
                       tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
@@ -144,6 +151,9 @@ inline int pathfinder_lbfgs_multi(
       logger.error(e.what());
       return error_codes::SOFTWARE;
     }
+    double pathfinders_delta_time = stan::services::util::duration_diff(
+        start_pathfinders_time, std::chrono::steady_clock::now());
+    write_times<true>(parameter_writer, pathfinders_delta_time, 0);
     // Writes are done in loop, so just return
     return error_codes::OK;
   }
@@ -162,7 +172,7 @@ inline int pathfinder_lbfgs_multi(
           auto non_writer = [](auto&&... /* x */) {};
           for (int iter = r.begin(); iter < r.end(); ++iter) {
             auto pathfinder_ret
-                = stan::services::pathfinder::pathfinder_lbfgs_single<true>(
+                = stan::services::pathfinder::pathfinder_lbfgs_single<true, true>(
                     model, *(init[iter]), random_seed, stride_id + iter,
                     init_radius, history_size, init_alpha, tol_obj, tol_rel_obj,
                     tol_grad, tol_rel_grad, tol_param, num_iterations,
@@ -217,32 +227,7 @@ inline int pathfinder_lbfgs_multi(
    */
   std::sort(psis_draw_idxs.data(),
             psis_draw_idxs.data() + psis_draw_idxs.size());
-  std::vector<std::string> param_names;
-  param_names.push_back("lp_approx__");
-  param_names.push_back("lp__");
-  param_names.push_back("pathfinder__");
-  model.constrained_param_names(param_names, true, true);
-  parameter_writer(param_names);
   const auto uc_param_size = param_names.size() - 3;
-  auto write_times = [](auto&& parameter_writer, double pathfinders_delta_time,
-                        double psis_delta_time) {
-    parameter_writer();
-    const auto time_header = std::string("Elapsed Time: ");
-    std::string optim_time_str = time_header
-                                 + std::to_string(pathfinders_delta_time)
-                                 + std::string(" seconds") + " (Pathfinders)";
-    parameter_writer(optim_time_str);
-    std::string psis_time_str = std::string(time_header.size(), ' ')
-                                + std::to_string(psis_delta_time)
-                                + " seconds (PSIS)";
-    parameter_writer(psis_time_str);
-    std::string total_time_str
-        = std::string(time_header.size(), ' ')
-          + std::to_string(pathfinders_delta_time + psis_delta_time)
-          + " seconds (Total)";
-    parameter_writer(total_time_str);
-    parameter_writer();
-  };
   // If one is null, then all are null
   if (unlikely(single_path_parameter_writer[0].is_valid())) {
     Eigen::VectorXd unconstrained_col;
@@ -276,17 +261,11 @@ inline int pathfinder_lbfgs_multi(
       }
       double psis_delta_time = stan::services::util::duration_diff(
           start_psis_time, std::chrono::steady_clock::now());
-      single_writer();
-      const auto time_header = std::string("Elapsed Time: ");
-      std::string optim_time_str
-          = time_header
-            + std::to_string(pathfinders_delta_time + psis_delta_time)
-            + std::string(" seconds") + " (Pathfinder)";
-      single_writer(optim_time_str);
+      write_times<false>(single_writer, pathfinders_delta_time, 0);
     }
     double psis_delta_time = stan::services::util::duration_diff(
         start_psis_time, std::chrono::steady_clock::now());
-    write_times(parameter_writer, pathfinders_delta_time, psis_delta_time);
+    write_times<true>(parameter_writer, pathfinders_delta_time, psis_delta_time);
     return error_codes::OK;
   }
   stan::callbacks::concurrent_writer safe_write{parameter_writer};
@@ -318,7 +297,7 @@ inline int pathfinder_lbfgs_multi(
   safe_write.wait();
   double psis_delta_time = stan::services::util::duration_diff(
       start_psis_time, std::chrono::steady_clock::now());
-  write_times(parameter_writer, pathfinders_delta_time, psis_delta_time);
+  write_times<true>(parameter_writer, pathfinders_delta_time, psis_delta_time);
   return error_codes::OK;
 }
 }  // namespace pathfinder

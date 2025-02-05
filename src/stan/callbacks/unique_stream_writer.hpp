@@ -35,7 +35,7 @@ class unique_stream_writer final : public writer {
                                 const std::string& comment_prefix = "")
       : output_(std::move(output)), comment_prefix_(comment_prefix) {}
 
-  unique_stream_writer();
+  unique_stream_writer() = default;
   unique_stream_writer(unique_stream_writer& other) = delete;
   unique_stream_writer(unique_stream_writer&& other)
       : output_(std::move(other.output_)),
@@ -148,7 +148,7 @@ class unique_stream_writer final : public writer {
   /**
    * Checks if stream is valid.
    */
-  bool is_valid() const noexcept { return output_ != nullptr; }
+  bool is_valid() const noexcept { return output_ != nullptr && (*output_).good(); }
 
  private:
   /**

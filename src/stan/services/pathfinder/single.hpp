@@ -529,6 +529,39 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, ConstrainFun&& constrain_fun,
     return std::make_pair(internal::elbo_est_t{}, internal::taylor_approx_t{});
   }
 }
+
+/**
+ * Write time lines for a pathfinder output file
+ * @tparam MultiPathfinder If true, output uses (Pathfinders) else (Pathfinder)
+ * @tparam ParamWriter Type inheriting from `stan::callbacks::writer`
+ * @param[in,out] parameter_writer A callback writer for messages
+ * @param pathfinders_delta_time Time taken for pathfinders
+ * @param psis_delta_time Time taken for PSIS
+ */
+template <bool MultiPathfinder, typename ParamWriter>
+inline void write_times(ParamWriter&& parameter_writer, double pathfinders_delta_time,
+                      double psis_delta_time) {
+  parameter_writer();
+  const auto time_header = std::string("Elapsed Time: ");
+  std::string optim_time_str = time_header
+                                + std::to_string(pathfinders_delta_time)
+                                + std::string(" seconds") +
+                                (MultiPathfinder ? " (Pathfinders)" : " (Pathfinder)");
+  parameter_writer(optim_time_str);
+  if (psis_delta_time != 0) {
+  std::string psis_time_str = std::string(time_header.size(), ' ')
+                              + std::to_string(psis_delta_time)
+                              + " seconds (PSIS)";
+  parameter_writer(psis_time_str);
+  }
+  std::string total_time_str
+      = std::string(time_header.size(), ' ')
+        + std::to_string(pathfinders_delta_time + psis_delta_time)
+        + " seconds (Total)";
+  parameter_writer(total_time_str);
+  parameter_writer();
+}
+
 }  // namespace internal
 
 /**
@@ -536,6 +569,8 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, ConstrainFun&& constrain_fun,
  * to the specified callbacks and it returns a return code.
  * @tparam ReturnLpSamples if `true` single pathfinder returns the lp_ratio
  * vector and approximate samples. If `false` only gives a return code.
+ * @tparam InMultiPathfinder if `true` the pathfinder is called from the multi
+ * pathfinder. If `false` the pathfinder is called directly.
  * @tparam Model type of model
  * @tparam DiagnosticWriter Type inheriting from @ref
  * stan::callbacks::structured_writer
@@ -588,8 +623,8 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, ConstrainFun&& constrain_fun,
  * `error_codes::OK` if successful, `error_codes::SOFTWARE` or
  * `error_codes::CONFIG` for failures
  */
-template <bool ReturnLpSamples = false, class Model, typename DiagnosticWriter,
-          typename ParamWriter>
+template <bool ReturnLpSamples = false, bool InMultiPathfinder = false,
+          class Model, typename DiagnosticWriter, typename ParamWriter>
 inline auto pathfinder_lbfgs_single(
     Model& model, const stan::io::var_context& init, unsigned int random_seed,
     unsigned int stride_id, double init_radius, int max_history_size,
@@ -861,7 +896,18 @@ inline auto pathfinder_lbfgs_single(
     names.push_back("lp__");
     names.push_back("pathfinder__");
     model.constrained_param_names(names, true, true);
-    parameter_writer(names);
+    if constexpr (InMultiPathfinder) {
+      static_assert(stan::callbacks::is_tee_writer_v<ParamWriter>,
+                    "ReturnLpSamples is false but the parameter_writer is not "
+                    "a tee_writer! "
+                    "Multi pathfinder assumes we use a tee writer here, if you "
+                    "intend to change this "
+                    "please make it clear why.");
+      auto&& single_stream = std::get<0>(parameter_writer.get_stream());
+      single_stream(names);
+    } else {
+      parameter_writer(names);
+    }
     Eigen::Matrix<double, 1, Eigen::Dynamic> constrained_draws_vec(
         names.size());
     constrained_draws_vec(2) = stride_id - ((stride_id == 0) ? 0 : 1);
@@ -943,33 +989,22 @@ inline auto pathfinder_lbfgs_single(
       }
       lp_ratio = std::move(elbo_best.lp_ratio.head(num_draws));
     }
-    const auto end_pathfinder_time = std::chrono::steady_clock::now();
     const double pathfinder_delta_time = stan::services::util::duration_diff(
-        start_pathfinder_time, end_pathfinder_time);
+        start_pathfinder_time, std::chrono::steady_clock::now());
     // For multi pathfinder, multi would write multiple end times
-    if constexpr (ReturnLpSamples) {
+    if constexpr (InMultiPathfinder) {
       static_assert(stan::callbacks::is_tee_writer_v<ParamWriter>,
-                    "ReturnLpSamples is true, but the parameter_writer is not "
+                    "ReturnLpSamples is false but the parameter_writer is not "
                     "a tee_writer! "
                     "Multi pathfinder assumes we use a tee writer here, if you "
                     "intend to change this "
                     "please make it clear why.");
       auto&& single_stream = std::get<0>(parameter_writer.get_stream());
-      single_stream();
-      std::string pathfinder_time_str = "Elapsed Time: ";
-      pathfinder_time_str += std::to_string(pathfinder_delta_time)
-                             + std::string(" seconds (Pathfinder)");
-      single_stream(pathfinder_time_str);
-      single_stream();
+      internal::write_times<false>(single_stream, pathfinder_delta_time, 0);
       return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                        internal::elbo_est_t{});
     } else {
-      parameter_writer();
-      std::string pathfinder_time_str = "Elapsed Time: ";
-      pathfinder_time_str += std::to_string(pathfinder_delta_time)
-                             + std::string(" seconds (Pathfinder)");
-      parameter_writer(pathfinder_time_str);
-      parameter_writer();
+      internal::write_times<false>(parameter_writer, pathfinder_delta_time, 0);
       return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                        internal::elbo_est_t{});
     }

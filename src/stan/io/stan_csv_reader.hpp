@@ -4,6 +4,7 @@
 #include <boost/algorithm/string.hpp>
 #include <stan/math/prim.hpp>
 #include <cctype>
+#include <charconv>
 #include <istream>
 #include <iostream>
 #include <sstream>
@@ -334,9 +335,8 @@ class stan_csv_reader {
         for (int col = 0; col < cols; col++) {
           std::getline(ls, line, ',');
           boost::trim(line);
-          try {
-            samples(row, col) = static_cast<double>(std::stold(line));
-          } catch (const std::out_of_range& e) {
+          auto [ptr, ec] = std::from_chars(line.data(), line.data() + line.size(), samples.coeffRef(row, col));
+          if (ec != std::errc()) {
             samples(row, col) = std::numeric_limits<double>::quiet_NaN();
           }
         }
