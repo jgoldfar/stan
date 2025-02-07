@@ -108,13 +108,13 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   stan::test::in_memory_writer parameter2;
   // Check we get the same result running multiple times
   int return_code2 = stan::services::pathfinder::pathfinder_lbfgs_multi(
-    model, single_path_inits, seed, stride_id, init_radius, history_size,
-    init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
-    num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
-    save_iterations, refresh, callback, logger,
-    std::vector<stan::callbacks::stream_writer>(num_paths, init),
-    single_path_parameter_writer, single_path_diagnostic_writer, parameter2,
-    diagnostics, calculate_lp, resample);
+      model, single_path_inits, seed, stride_id, init_radius, history_size,
+      init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+      num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
+      save_iterations, refresh, callback, logger,
+      std::vector<stan::callbacks::stream_writer>(num_paths, init),
+      single_path_parameter_writer, single_path_diagnostic_writer, parameter2,
+      diagnostics, calculate_lp, resample);
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
@@ -131,7 +131,7 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   for (int j = 0; j < 21; ++j) {
     for (Eigen::Index i = 0; i < num_multi_draws; i++) {
       EXPECT_EQ(param_vals(i, j), param_vals2(i, j));
-    }  
+    }
   }
   auto param_tmp = param_vals(Eigen::all, param_indices);
   auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);
