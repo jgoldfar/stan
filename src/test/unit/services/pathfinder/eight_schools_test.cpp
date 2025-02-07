@@ -39,7 +39,6 @@ class ServicesPathfinderEightSchools : public testing::Test {
  public:
   ServicesPathfinderEightSchools()
       : init(init_ss),
-        parameter(parameter_ss),
         diagnostics(
             std::unique_ptr<std::stringstream, stan::test::deleter_noop>(
                 &diagnostic_ss)),
@@ -51,7 +50,7 @@ class ServicesPathfinderEightSchools : public testing::Test {
     diagnostic_ss.clear();
   }
 
-  std::stringstream init_ss, parameter_ss, diagnostic_ss, model_ss;
+  std::stringstream init_ss, diagnostic_ss, model_ss;
   stan::callbacks::stream_writer init;
   stan::test::in_memory_writer parameter;
   stan::callbacks::json_writer<std::stringstream, stan::test::deleter_noop>
@@ -106,6 +105,16 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
       std::vector<stan::callbacks::stream_writer>(num_paths, init),
       single_path_parameter_writer, single_path_diagnostic_writer, parameter,
       diagnostics, calculate_lp, resample);
+  stan::test::in_memory_writer parameter2;
+  // Check we get the same result running multiple times
+  int return_code2 = stan::services::pathfinder::pathfinder_lbfgs_multi(
+    model, single_path_inits, seed, stride_id, init_radius, history_size,
+    init_alpha, tol_obj, tol_rel_obj, tol_grad, tol_rel_grad, tol_param,
+    num_iterations, num_elbo_draws, num_draws, num_multi_draws, num_paths,
+    save_iterations, refresh, callback, logger,
+    std::vector<stan::callbacks::stream_writer>(num_paths, init),
+    single_path_parameter_writer, single_path_diagnostic_writer, parameter2,
+    diagnostics, calculate_lp, resample);
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
                                "", "");
@@ -113,9 +122,16 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   EXPECT_EQ(param_vals.cols(), 21);
   EXPECT_EQ(param_vals.rows(), num_multi_draws);
   // They can be in any order and any number
+  std::unordered_map<int, int> path_counts;
   for (Eigen::Index i = 0; i < num_multi_draws; i++) {
     EXPECT_GE(param_vals.col(2)(i), 0);
     EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+  }
+  Eigen::MatrixXd param_vals2 = parameter.get_eigen_state_values();
+  for (int j = 0; j < 21; ++j) {
+    for (Eigen::Index i = 0; i < num_multi_draws; i++) {
+      EXPECT_EQ(param_vals(i, j), param_vals2(i, j));
+    }  
   }
   auto param_tmp = param_vals(Eigen::all, param_indices);
   auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);
