@@ -214,10 +214,9 @@ generate_matrix(Generator&& variate_generator, const Eigen::Index num_params,
  * @return A struct with the ELBO estimate along with the samples and log
  * probability ratios.
  */
-template <bool ReturnElbo = true, typename LPF, 
-          typename RNG, typename EigVec, typename Logger>
-inline elbo_est_t est_approx_draws(LPF&& lp_fun, 
-                                   RNG&& rng,
+template <bool ReturnElbo = true, typename LPF, typename RNG, typename EigVec,
+          typename Logger>
+inline elbo_est_t est_approx_draws(LPF&& lp_fun, RNG&& rng,
                                    const taylor_approx_t& taylor_approx,
                                    size_t num_samples, const EigVec& alpha,
                                    const std::string& iter_msg, Logger&& logger,
@@ -500,11 +499,11 @@ inline auto ret_pathfinder(int return_code, EigVec&& elbo_est) noexcept {
  * @return A pair holding the elbo estimate information and the taylor
  * approximation information.
  */
-template <typename RNG, typename LPFun,
-          typename AlphaVec, typename CurrentParams, typename CurrentGrads,
-          typename GradMat, typename ParamMat, typename Logger>
-auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, 
-                     AlphaVec&& alpha, CurrentParams&& current_params,
+template <typename RNG, typename LPFun, typename AlphaVec,
+          typename CurrentParams, typename CurrentGrads, typename GradMat,
+          typename ParamMat, typename Logger>
+auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, AlphaVec&& alpha,
+                     CurrentParams&& current_params,
                      CurrentGrads&& current_grads, GradMat&& Ykt_mat,
                      ParamMat&& Skt_mat, std::size_t num_elbo_draws,
                      const std::string& iter_msg, Logger&& logger) {
@@ -519,10 +518,10 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun,
   internal::taylor_approx_t taylor_appx = internal::taylor_approximation(
       Ykt_mat, alpha, Dk, Skt_mat.transpose(), current_params, current_grads);
   try {
-    return std::make_pair(internal::est_approx_draws<true>(
-                              lp_fun, rng, taylor_appx,
-                              num_elbo_draws, alpha, iter_msg, logger),
-                          taylor_appx);
+    return std::make_pair(
+        internal::est_approx_draws<true>(
+            lp_fun, rng, taylor_appx, num_elbo_draws, alpha, iter_msg, logger),
+        taylor_appx);
   } catch (const std::domain_error& e) {
     logger.warn(iter_msg + "ELBO estimation failed "
                 + " with error: " + e.what());
@@ -799,8 +798,8 @@ inline auto pathfinder_lbfgs_single(
                            + std::to_string(lbfgs.iter_num()) + "] ");
 
       auto pathfinder_res = internal::pathfinder_impl(
-          rng, lp_fun, alpha, lbfgs.curr_x(), lbfgs.curr_g(),
-          Ykt_map, Skt_map, num_elbo_draws, iter_msg, logger);
+          rng, lp_fun, alpha, lbfgs.curr_x(), lbfgs.curr_g(), Ykt_map, Skt_map,
+          num_elbo_draws, iter_msg, logger);
       num_evals += pathfinder_res.first.fn_calls;
       print_log_remainder(write_log_cond, msg, ret, num_evals, lbfgs,
                           pathfinder_res.first.elbo, pathfinder_res.first.elbo,
@@ -886,8 +885,8 @@ inline auto pathfinder_lbfgs_single(
   }
   if constexpr (ReturnLpSamples) {
     internal::elbo_est_t est_draws = internal::est_approx_draws<false>(
-        lp_fun, rng, taylor_approx_best, num_draws,
-        taylor_approx_best.alpha, path_num, logger, calculate_lp);
+        lp_fun, rng, taylor_approx_best, num_draws, taylor_approx_best.alpha,
+        path_num, logger, calculate_lp);
     return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                      std::move(est_draws));
   } else {
