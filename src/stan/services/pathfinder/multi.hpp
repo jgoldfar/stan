@@ -118,6 +118,7 @@ inline int pathfinder_lbfgs_multi(
   // All work is done in the parallel_for loop
   if (!psis_resample || !calculate_lp) {
     try {
+      std::atomic<int> num_path_successes{0};
       stan::callbacks::concurrent_writer safe_write{parameter_writer};
       tbb::parallel_for(
           tbb::blocked_range<int>(0, num_paths),
@@ -145,9 +146,19 @@ inline int pathfinder_lbfgs_multi(
                              + std::to_string(iter) + " failed.");
                 return;
               }
+              num_path_successes++;
             }
           });
       safe_write.wait();
+      if (unlikely(num_path_successes == 0)) {
+        logger.error("No pathfinders ran successfully.");
+        return error_codes::SOFTWARE;
+      } else if (unlikely(num_path_successes < num_paths)) {
+        std::string msg = std::string("Only ") + std::to_string(num_path_successes.load()) + 
+          std::string(" of the ") + std::to_string(num_paths) + 
+          std::string(" pathfinders succeeded.");
+        logger.warn(msg);
+      }
     } catch (const std::exception& e) {
       logger.error(e.what());
       return error_codes::SOFTWARE;
@@ -191,6 +202,15 @@ inline int pathfinder_lbfgs_multi(
                 std::make_pair(iter, std::move(std::get<1>(pathfinder_ret))));
           }
         });
+        if (unlikely(elbo_estimates.empty())) {
+          logger.error("No pathfinders ran successfully.");
+          return error_codes::SOFTWARE;
+        } else if (unlikely(elbo_estimates.size() < num_paths)) {
+          std::string msg = std::string("Only ") + std::to_string(elbo_estimates.size()) + 
+            std::string(" of the ") + std::to_string(num_paths) + 
+            std::string(" pathfinders succeeded.");
+          logger.warn(msg);
+        }
   } catch (const std::exception& e) {
     logger.error(e.what());
     return error_codes::SOFTWARE;

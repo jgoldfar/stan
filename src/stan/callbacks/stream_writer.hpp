@@ -89,7 +89,7 @@ class stream_writer : public writer {
    *
    * @param[in] values A column vector of values.
    */
-  virtual void operator()(const Eigen::Matrix<double, -1, 1>& values) {
+  void operator()(const Eigen::Matrix<double, -1, 1>& values) {
     output_ << values.transpose().format(CommaInitFmt);
   }
 
@@ -101,7 +101,7 @@ class stream_writer : public writer {
    *
    * @param[in] values A row vector of values.
    */
-  virtual void operator()(const Eigen::Matrix<double, 1, -1>& values) {
+  void operator()(const Eigen::Matrix<double, 1, -1>& values) {
     output_ << values.format(CommaInitFmt);
   }
 

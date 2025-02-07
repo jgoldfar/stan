@@ -94,7 +94,7 @@ struct concurrent_writer {
       eigen_messages_.push(std::forward<T>(t));
     } else {
       static_assert(
-          1,
+          0,
           "Unsupported type passed to concurrent_writer. This is an "
           "internal error. Please file an issue on the stan github "
           "repository with the error log from the compiler.\n"
