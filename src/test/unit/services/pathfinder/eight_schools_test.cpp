@@ -109,8 +109,6 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   EXPECT_EQ(param_vals.cols(), 21);
   EXPECT_EQ(param_vals.rows(), num_multi_draws);
-  // They can be in any order and any number
-  std::unordered_map<int, int> path_counts;
   for (Eigen::Index i = 0; i < num_multi_draws; i++) {
     EXPECT_GE(param_vals.col(2)(i), 0);
     EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
