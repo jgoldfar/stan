@@ -21,12 +21,12 @@ namespace stan::callbacks {
  * choose to wait for a thread to finish instead of spinning up the write
  * thread. So to circumvent that issue, we use an std::thread.
  * 2. If the bounded queues are full but the queue reader thread is blocked.
- * The queue reader thread is blocked because the queues are full. The other threads
- * are blocked because the queue reader thread is blocked. The queue reader thread is blocked
- * because the other threads are blocked. This is a deadlock. To circumvent this
- * issue, we check in the queue reader thread if the queues are full and if they are,
- * we set `block_` to true which blocks all other threads from attempting to write
- * to the queues. 
+ * The queue reader thread is blocked because the queues are full. The other
+ * threads are blocked because the queue reader thread is blocked. The queue
+ * reader thread is blocked because the other threads are blocked. This is a
+ * deadlock. To circumvent this issue, we check in the queue reader thread if
+ * the queues are full and if they are, we set `block_` to true which blocks all
+ * other threads from attempting to write to the queues.
  * @tparam Writer A type that inherits from `writer`
  */
 template <typename Writer>
@@ -64,11 +64,12 @@ struct concurrent_writer {
              || !(str_messages_.empty() && vec_str_messages_.empty()
                   && eigen_messages_.empty() && null_writes_queued == 0)) {
         if (!(str_messages_.size() >= 999 || vec_str_messages_.size() >= 999
-        || eigen_messages_.size() >= 999 || null_writes_queued >= 10)) {
+              || eigen_messages_.size() >= 999 || null_writes_queued >= 10)) {
           block_ = true;
         }
-        bool processed = !(str_messages_.empty() && vec_str_messages_.empty()
-        && eigen_messages_.empty() && null_writes_queued == 0);
+        bool processed
+            = !(str_messages_.empty() && vec_str_messages_.empty()
+                && eigen_messages_.empty() && null_writes_queued == 0);
         while (null_writes_queued > 0) {
           auto num_null_writes
               = null_writes_queued.load(std::memory_order_relaxed);
@@ -104,30 +105,31 @@ struct concurrent_writer {
   template <typename T>
   void operator()(T&& t) {
     bool pushed = false;
-    while(block_) {
+    while (block_) {
       std::this_thread::yield();
     }
     while (!pushed) {
-    if constexpr (stan::is_std_vector<T>::value) {
-      if constexpr (std::is_arithmetic_v<stan::value_type_t<T>>) {
-        pushed = eigen_messages_.try_push(Eigen::RowVectorXd::Map(t.data(), t.size()));
+      if constexpr (stan::is_std_vector<T>::value) {
+        if constexpr (std::is_arithmetic_v<stan::value_type_t<T>>) {
+          pushed = eigen_messages_.try_push(
+              Eigen::RowVectorXd::Map(t.data(), t.size()));
+        } else {
+          pushed = vec_str_messages_.try_push(t);
+        }
+      } else if constexpr (std::is_same_v<T, std::string>) {
+        pushed = str_messages_.try_push(std::forward<T>(t));
+      } else if constexpr (stan::is_eigen_vector<T>::value) {
+        pushed = eigen_messages_.try_push(std::forward<T>(t));
       } else {
-        pushed = vec_str_messages_.try_push(t);
+        throw std::domain_error(
+            "Unsupported type passed to concurrent_writer. This is an "
+            "internal error. Please file an issue on the stan github "
+            "repository with the error log from the compiler.\n"
+            "https://github.com/stan-dev/stan/issues/new?template=Blank+issue");
       }
-    } else if constexpr (std::is_same_v<T, std::string>) {
-      pushed = str_messages_.try_push(std::forward<T>(t));
-    } else if constexpr (stan::is_eigen_vector<T>::value) {
-      pushed = eigen_messages_.try_push(std::forward<T>(t));
-    } else {
-      throw std::domain_error(
-          "Unsupported type passed to concurrent_writer. This is an "
-          "internal error. Please file an issue on the stan github "
-          "repository with the error log from the compiler.\n"
-          "https://github.com/stan-dev/stan/issues/new?template=Blank+issue");
-    }
-    if (!pushed) {
-      std::this_thread::yield();
-    }
+      if (!pushed) {
+        std::this_thread::yield();
+      }
     }
   }
   /**

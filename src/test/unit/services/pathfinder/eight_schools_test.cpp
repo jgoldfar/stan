@@ -142,7 +142,6 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   for (Eigen::Index i = 0; i < all_mean_vals.cols(); i++) {
     EXPECT_NEAR(0, all_sd_vals(2, i), 2);
   }
-    
 }
 
 TEST_F(ServicesPathfinderEightSchools, multi_psis_only_output) {
@@ -197,7 +196,6 @@ TEST_F(ServicesPathfinderEightSchools, multi_psis_only_output) {
         single_path_parameter_writer, single_path_diagnostic_writer,
         parameter_writer2, diagnostics, calculate_lp, resample);
     EXPECT_EQ(return_code, return_code2);
-
   }
 
   Eigen::IOFormat CommaInitFmt(Eigen::StreamPrecision, 0, ", ", ", ", "\n", "",
@@ -220,7 +218,7 @@ TEST_F(ServicesPathfinderEightSchools, multi_psis_only_output) {
   };
   check_output(streamer1.str(), stan_data1);
   check_output(streamer2.str(), stan_data2);
-  
+
   for (int j = 0; j < 21; ++j) {
     Eigen::VectorXd param_vals_col = param_vals.col(j);
     Eigen::VectorXd param_vals2_col = param_vals2.col(j);
@@ -234,7 +232,6 @@ TEST_F(ServicesPathfinderEightSchools, multi_psis_only_output) {
           << " != " << param_vals2_col(i);
     }
   }
-    
 }
 
 TEST_F(ServicesPathfinderEightSchools, multi_and_single_psis_output) {
