@@ -15,10 +15,18 @@ namespace stan::callbacks {
  * Takes a writer and makes it thread safe via multiple queues.
  * On construction, a single busy thread is spawned to write to the writer.
  * This class uses an `std::thread` instead of a tbb task graph because
- * of deadlocking issues. A deadlock can occur if TBB gives all threads to the
+ * of deadlocking issues. A deadlock in two major cases.
+ * 1. If TBB gives all threads to the
  * parallel for loop, and all threads hit an instance of max capacity. TBB can
  * choose to wait for a thread to finish instead of spinning up the write
  * thread. So to circumvent that issue, we use an std::thread.
+ * 2. If the bounded queues are full but the queue reader thread is blocked.
+ * The queue reader thread is blocked because the queues are full. The other threads
+ * are blocked because the queue reader thread is blocked. The queue reader thread is blocked
+ * because the other threads are blocked. This is a deadlock. To circumvent this
+ * issue, we check in the queue reader thread if the queues are full and if they are,
+ * we set `block_` to true which blocks all other threads from attempting to write
+ * to the queues. 
  * @tparam Writer A type that inherits from `writer`
  */
 template <typename Writer>
@@ -35,6 +43,8 @@ struct concurrent_writer {
   tbb::concurrent_bounded_queue<Eigen::RowVectorXd> eigen_messages_{};
   // Flag to stop the writing thread once all queues are empty
   bool continue_writing_{true};
+  // Flag to block threads from writing to queues if the queues are full
+  std::atomic<bool> block_{false};
   // The writing thread
   std::thread thread_;
   /**
@@ -53,6 +63,12 @@ struct concurrent_writer {
       while (continue_writing_
              || !(str_messages_.empty() && vec_str_messages_.empty()
                   && eigen_messages_.empty() && null_writes_queued == 0)) {
+        if (!(str_messages_.size() >= 999 || vec_str_messages_.size() >= 999
+        || eigen_messages_.size() >= 999 || null_writes_queued >= 10)) {
+          block_ = true;
+        }
+        bool processed = !(str_messages_.empty() && vec_str_messages_.empty()
+        && eigen_messages_.empty() && null_writes_queued == 0);
         while (null_writes_queued > 0) {
           auto num_null_writes
               = null_writes_queued.load(std::memory_order_relaxed);
@@ -71,34 +87,47 @@ struct concurrent_writer {
         while (eigen_messages_.try_pop(eigen)) {
           writer(eigen);
         }
+        if (!processed) {
+          std::this_thread::yield();
+        }
+        block_ = false;
       }
     });
   }
   /**
    * Place a value in a queue for writing.
+   * @note This function will block if the queues are full
    * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or
    * a string
    * @param t A value to put on a queue
    */
   template <typename T>
   void operator()(T&& t) {
+    bool pushed = false;
+    while(block_) {
+      std::this_thread::yield();
+    }
+    while (!pushed) {
     if constexpr (stan::is_std_vector<T>::value) {
       if constexpr (std::is_arithmetic_v<stan::value_type_t<T>>) {
-        eigen_messages_.push(Eigen::RowVectorXd::Map(t.data(), t.size()));
+        pushed = eigen_messages_.try_push(Eigen::RowVectorXd::Map(t.data(), t.size()));
       } else {
-        vec_str_messages_.push(t);
+        pushed = vec_str_messages_.try_push(t);
       }
     } else if constexpr (std::is_same_v<T, std::string>) {
-      str_messages_.push(std::forward<T>(t));
+      pushed = str_messages_.try_push(std::forward<T>(t));
     } else if constexpr (stan::is_eigen_vector<T>::value) {
-      eigen_messages_.push(std::forward<T>(t));
+      pushed = eigen_messages_.try_push(std::forward<T>(t));
     } else {
-      static_assert(
-          0,
+      throw std::domain_error(
           "Unsupported type passed to concurrent_writer. This is an "
           "internal error. Please file an issue on the stan github "
           "repository with the error log from the compiler.\n"
           "https://github.com/stan-dev/stan/issues/new?template=Blank+issue");
+    }
+    if (!pushed) {
+      std::this_thread::yield();
+    }
     }
   }
   /**
@@ -110,8 +139,11 @@ struct concurrent_writer {
    */
   void wait() {
     continue_writing_ = false;
-    thread_.join();
+    if (thread_.joinable()) {
+      thread_.join();
+    }
   }
+  ~concurrent_writer() { wait(); }
 };
 #else
 /**

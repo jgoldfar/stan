@@ -822,7 +822,7 @@ inline auto pathfinder_lbfgs_single(
         lbfgs_ss.str("");
       }
 
-      if (pathfinder_res.first.elbo > elbo_best.elbo) {
+      if (!std::isinf(pathfinder_res.first.elbo) && pathfinder_res.first.elbo > elbo_best.elbo) {
         elbo_best = std::move(pathfinder_res.first);
         taylor_approx_best = std::move(pathfinder_res.second);
         best_iteration = lbfgs.iter_num();
