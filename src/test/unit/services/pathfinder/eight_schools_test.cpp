@@ -45,9 +45,18 @@ class ServicesPathfinderEightSchools : public testing::Test {
         context(init_context()),
         model(context, 0, &model_ss) {}
 
-  void SetUp() {
+  void TearDown() {
     diagnostic_ss.str(std::string());
     diagnostic_ss.clear();
+    init_ss.str(std::string());
+    init_ss.clear();
+    model_ss.str(std::string());
+    model_ss.clear();
+    for (auto& ss : init_streams) {
+      ss.str(std::string());
+      ss.clear();
+    }
+    parameter.clear();
   }
 
   std::stringstream init_ss, diagnostic_ss, model_ss;

@@ -4,6 +4,7 @@
 #include <stan/math/prim/fun/Eigen.hpp>
 #include <stan/math/prim/meta.hpp>
 #include <tbb/concurrent_queue.h>
+#include <condition_variable>
 #include <functional>
 #include <string>
 #include <thread>
@@ -13,20 +14,30 @@ namespace stan::callbacks {
 #ifdef STAN_THREADS
 /**
  * Takes a writer and makes it thread safe via multiple queues.
- * On construction, a single busy thread is spawned to write to the writer.
+ * On construction, a thread is spawned to write to the writer.
  * This class uses an `std::thread` instead of a tbb task graph because
- * of deadlocking issues. A deadlock in two major cases.
- * 1. If TBB gives all threads to the
- * parallel for loop, and all threads hit an instance of max capacity. TBB can
- * choose to wait for a thread to finish instead of spinning up the write
- * thread. So to circumvent that issue, we use an std::thread.
- * 2. If the bounded queues are full but the queue reader thread is blocked.
- * The queue reader thread is blocked because the queues are full. The other
- * threads are blocked because the queue reader thread is blocked. The queue
- * reader thread is blocked because the other threads are blocked. This is a
- * deadlock. To circumvent this issue, we check in the queue reader thread if
- * the queues are full and if they are, we set `block_` to true which blocks all
- * other threads from attempting to write to the queues.
+ * of deadlocking issues. A deadlock can happen in two major cases.
+ * 1. If TBB gives all threads a task, and all threads hit an instance of max
+ * capacity. TBB can choose to wait for a thread to finish instead of spinning
+ * up the write thread. So to circumvent that issue, we use an std::thread.
+ * 2. If the bounded queues are full but the consumer thread is not scheduled
+ *  because there are more busy threads than the number of threads available.
+ * The producer threads are blocked because the queues are full. The consumer
+ * thread is blocked because the producer thread is spinning. Then we have a
+ * deadlock because the consumer thread is blocked because the producer threads
+ * are blocked.
+ * i.e. queue(full)->producer(blocked)->consumer(blocked)->producer(blocked)
+ * To circumvent this issue, we check in the producer threads if
+ * the queues are almost* full and if they are, we make a lock and wait for
+ * the consumer thread to signal it's queues are not longer at capacity. This
+ * frees a thread for the consumer thread to write to the writer. Once the
+ * consumer thread is finished writing, it will notify all the producer threads
+ * to continue sending data. The check for the queues being almost full is
+ * done by checking if the size of the queue is greater than the max capacity
+ * minus the number of threads times 2. This is a heuristic to make sure that,
+ * if some threads slip past the check and write to the queue, the bounded queue
+ * will still not be full.
+ *
  * @tparam Writer A type that inherits from `writer`
  */
 template <typename Writer>
@@ -41,21 +52,30 @@ struct concurrent_writer {
   tbb::concurrent_bounded_queue<std::vector<std::string>> vec_str_messages_{};
   // Queue for Eigen vector messages
   tbb::concurrent_bounded_queue<Eigen::RowVectorXd> eigen_messages_{};
-  // Flag to stop the writing thread once all queues are empty
-  bool continue_writing_{true};
-  // Flag to block threads from writing to queues if the queues are full
-  std::atomic<bool> block_{false};
+  // Block threads from writing to queues if the queues are full
+  std::mutex block_{};
   // The writing thread
   std::thread thread_;
+  // Condition variable to signal the writing thread to continue
+  std::condition_variable cv;
+  // Maximum number of threads that can be in use
+  std::size_t max_threads{tbb::global_control::max_allowed_parallelism};
+  // Max capacity of queue
+  std::size_t max_capacity{1000 + max_threads};
+  // Threshold where the writing threads will wait for the queues to empty
+  std::size_t wait_threshold{max_capacity - (max_threads * 2)};
+  // Flag to stop the writing thread once all queues are empty
+  bool continue_writing_{true};
+
   /**
-   * Constructs a concurrent writer from a writer and spins up a thread for
-   * writing.
+   * Constructs a concurrent writer from a writer.
+   * @note This will start a thread to write to the writer.
    * @param writer A writer to write to
    */
   explicit concurrent_writer(Writer& writer) : writer(writer) {
-    str_messages_.set_capacity(1000);
-    vec_str_messages_.set_capacity(1000);
-    eigen_messages_.set_capacity(1000);
+    str_messages_.set_capacity(max_capacity);
+    vec_str_messages_.set_capacity(max_capacity);
+    eigen_messages_.set_capacity(max_capacity);
     thread_ = std::thread([&]() {
       std::string str;
       std::vector<std::string> vec_str;
@@ -63,13 +83,6 @@ struct concurrent_writer {
       while (continue_writing_
              || !(str_messages_.empty() && vec_str_messages_.empty()
                   && eigen_messages_.empty() && null_writes_queued == 0)) {
-        if (!(str_messages_.size() >= 999 || vec_str_messages_.size() >= 999
-              || eigen_messages_.size() >= 999 || null_writes_queued >= 10)) {
-          block_ = true;
-        }
-        bool processed
-            = !(str_messages_.empty() && vec_str_messages_.empty()
-                && eigen_messages_.empty() && null_writes_queued == 0);
         while (null_writes_queued > 0) {
           auto num_null_writes
               = null_writes_queued.load(std::memory_order_relaxed);
@@ -88,16 +101,35 @@ struct concurrent_writer {
         while (eigen_messages_.try_pop(eigen)) {
           writer(eigen);
         }
-        if (!processed) {
+        if (this->all_empty()) {
+          cv.notify_all();
           std::this_thread::yield();
         }
-        block_ = false;
       }
     });
   }
+
+  /**
+   * Checks if all queues are empty
+   */
+  inline bool all_empty() {
+    return str_messages_.empty() && vec_str_messages_.empty()
+                && eigen_messages_.empty() && null_writes_queued == 0;
+  }
+
+  /**
+   * Check if any of the queues are at capacity
+   */
+  inline bool any_hit_capacity() {
+    return str_messages_.size() >= wait_threshold || vec_str_messages_.size() >= wait_threshold
+          || eigen_messages_.size() >= wait_threshold || null_writes_queued >= wait_threshold;
+  }
+
   /**
    * Place a value in a queue for writing.
-   * @note This function will block if the queues are full
+   * @note If any of the queues are at capacity, the thread yields itself until the
+   *  the queues empty. In the case of spurious startups the wait just checks
+   *  that the queues are not full.
    * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or
    * a string
    * @param t A value to put on a queue
@@ -105,8 +137,9 @@ struct concurrent_writer {
   template <typename T>
   void operator()(T&& t) {
     bool pushed = false;
-    while (block_) {
-      std::this_thread::yield();
+    if  (this->any_hit_capacity()){
+      std::unique_lock lk(block_);
+      cv.wait(lk, [this_ = this]{ return !(this_->any_hit_capacity()); });
     }
     while (!pushed) {
       if constexpr (stan::is_std_vector<T>::value) {
@@ -114,14 +147,15 @@ struct concurrent_writer {
           pushed = eigen_messages_.try_push(
               Eigen::RowVectorXd::Map(t.data(), t.size()));
         } else {
-          pushed = vec_str_messages_.try_push(t);
+          pushed = vec_str_messages_.try_push(std::forward<T>(t));
         }
       } else if constexpr (std::is_same_v<T, std::string>) {
         pushed = str_messages_.try_push(std::forward<T>(t));
       } else if constexpr (stan::is_eigen_vector<T>::value) {
         pushed = eigen_messages_.try_push(std::forward<T>(t));
       } else {
-        throw std::domain_error(
+        static_assert(
+            !(stan::is_std_vector<T>::value || std::is_same_v<T, std::string> || stan::is_eigen_vector<T>::value),
             "Unsupported type passed to concurrent_writer. This is an "
             "internal error. Please file an issue on the stan github "
             "repository with the error log from the compiler.\n"
@@ -132,10 +166,12 @@ struct concurrent_writer {
       }
     }
   }
+
   /**
    * Writes a comment prefix to the writer.
    */
   void operator()() { null_writes_queued++; }
+
   /**
    * Waits till all writes are finished on the thread
    */
@@ -145,6 +181,9 @@ struct concurrent_writer {
       thread_.join();
     }
   }
+  /**
+   * Destructor makes sure the thread is joined before destruction
+   */
   ~concurrent_writer() { wait(); }
 };
 #else

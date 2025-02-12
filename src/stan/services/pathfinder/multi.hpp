@@ -254,47 +254,6 @@ inline int pathfinder_lbfgs_multi(
   std::sort(psis_draw_idxs.data(),
             psis_draw_idxs.data() + psis_draw_idxs.size());
   const auto uc_param_size = param_names.size() - 3;
-  // If one is null, then all are null
-  if (unlikely(single_path_parameter_writer[0].is_valid())) {
-    Eigen::VectorXd unconstrained_col;
-    Eigen::VectorXd approx_samples_constrained_col;
-    Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
-    Eigen::Index psis_writer_position = 0;
-    for (Eigen::Index path_idx = 0; path_idx < num_successful_paths;
-         ++path_idx) {
-      auto&& single_writer = single_path_parameter_writer[path_idx];
-      single_writer(param_names);
-      auto&& elbo_est = elbo_estimates[path_idx].second;
-      auto&& lp_draws = elbo_est.lp_mat;
-      auto&& new_draws = elbo_est.repeat_draws;
-      const Eigen::Index param_size = new_draws.rows();
-      const Eigen::Index num_samples = new_draws.cols();
-      for (Eigen::Index j = 0; j < num_samples; ++j) {
-        unconstrained_col = new_draws.col(j);
-        constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
-                      rng);
-        sample_row.head(2) = lp_draws.row(j).matrix();
-        sample_row(2) = elbo_estimates[path_idx].first;
-        sample_row.tail(uc_param_size) = approx_samples_constrained_col;
-        single_writer(sample_row);
-        // while() since there can be multiples of the same idx
-        while ((elbo_estimates[path_idx].first * num_samples + j)
-               == psis_draw_idxs.coeff(psis_writer_position)) {
-          parameter_writer(sample_row);
-          // Since idxs are sorted, just increment the next position.
-          ++psis_writer_position;
-        }
-      }
-      double psis_delta_time = stan::services::util::duration_diff(
-          start_psis_time, std::chrono::steady_clock::now());
-      write_times<false>(single_writer, pathfinders_delta_time, 0);
-    }
-    double psis_delta_time = stan::services::util::duration_diff(
-        start_psis_time, std::chrono::steady_clock::now());
-    write_times<true>(parameter_writer, pathfinders_delta_time,
-                      psis_delta_time);
-    return error_codes::OK;
-  }
   std::vector<std::pair<Eigen::Index, Eigen::Index>> single_path_psis_idxs(
       num_successful_paths, {0, 0});
   Eigen::Index prev_path_num = -1;
@@ -307,6 +266,56 @@ inline int pathfinder_lbfgs_multi(
     }
     single_path_psis_idxs[path_num].second = i + 1;
   }
+  // If one is null, then all are null
+  if (unlikely(single_path_parameter_writer[0].is_valid())) {
+  stan::callbacks::concurrent_writer safe_write{parameter_writer};
+  tbb::parallel_for(
+      tbb::blocked_range<Eigen::Index>(0, num_successful_paths),
+      [&](const tbb::blocked_range<Eigen::Index>& r) {
+        Eigen::VectorXd unconstrained_col;
+        Eigen::VectorXd approx_samples_constrained_col;
+        Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
+        for (Eigen::Index i = r.begin(); i < r.end(); ++i) {
+      auto psis_writer_position = single_path_psis_idxs[i].first;
+      auto path_num = elbo_estimates[i].first;
+      auto&& single_writer = single_path_parameter_writer[path_num];
+      single_writer(param_names);
+      auto&& elbo_est = elbo_estimates[i].second;
+      auto&& lp_draws = elbo_est.lp_mat;
+      auto&& new_draws = elbo_est.repeat_draws;
+      const Eigen::Index num_samples = new_draws.cols();
+      stan::rng_t local_rng = util::create_rng(random_seed, stride_id + static_cast<std::size_t>(path_num));
+      for (Eigen::Index j = 0; j < num_samples; ++j) {
+        unconstrained_col = new_draws.col(j);
+        constrain_fun(approx_samples_constrained_col, unconstrained_col, model,
+                      local_rng);
+        sample_row.head(2) = lp_draws.row(j).matrix();
+        sample_row(2) = elbo_estimates[i].first;
+        sample_row.tail(uc_param_size) = approx_samples_constrained_col;
+        single_writer(sample_row);
+        while ((elbo_estimates[i].first * num_samples + j)
+          > psis_draw_idxs.coeff(psis_writer_position)) {
+              ++psis_writer_position;
+        }
+        // while() since there can be multiples of the same idx
+        while ((elbo_estimates[i].first * num_samples + j)
+               == psis_draw_idxs.coeff(psis_writer_position)) {
+          safe_write(sample_row);
+          // Since idxs are sorted, just increment the next position.
+          ++psis_writer_position;
+        }
+      }
+      double psis_delta_time = stan::services::util::duration_diff(
+          start_psis_time, std::chrono::steady_clock::now());
+      write_times<false>(single_writer, pathfinders_delta_time, 0);
+    }});
+    safe_write.wait();
+    double psis_delta_time = stan::services::util::duration_diff(
+        start_psis_time, std::chrono::steady_clock::now());
+    write_times<true>(parameter_writer, pathfinders_delta_time,
+                      psis_delta_time);
+    return error_codes::OK;
+  }
   stan::callbacks::concurrent_writer safe_write{parameter_writer};
   tbb::parallel_for(
       tbb::blocked_range<Eigen::Index>(0, num_successful_paths),
@@ -316,7 +325,7 @@ inline int pathfinder_lbfgs_multi(
         Eigen::Matrix<double, 1, Eigen::Dynamic> sample_row(param_names.size());
         for (Eigen::Index i = r.begin(); i < r.end(); ++i) {
           stan::rng_t rng_local = util::create_rng(
-              random_seed, stride_id + static_cast<std::size_t>(i));
+              random_seed, stride_id + static_cast<std::size_t>(elbo_estimates[i].first));
           for (Eigen::Index j = single_path_psis_idxs[i].first;
                j < single_path_psis_idxs[i].second; ++j) {
             const Eigen::Index draw_idx = psis_draw_idxs.coeff(j);
@@ -335,7 +344,7 @@ inline int pathfinder_lbfgs_multi(
             safe_write(sample_row);
             // If we see the same draw idx more than once, just increment j and
             // write again
-            while (j < (single_path_psis_idxs[i].second - 1)
+            while (j < (single_path_psis_idxs[i].second)
                    && draw_idx == psis_draw_idxs.coeff(j + 1)) {
               safe_write(sample_row);
               ++j;
