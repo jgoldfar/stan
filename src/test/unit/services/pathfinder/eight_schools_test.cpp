@@ -60,7 +60,7 @@ class ServicesPathfinderEightSchools : public testing::Test {
   static constexpr unsigned int seed = 0;
   static constexpr unsigned int stride_id = 1;
   static constexpr double init_radius = 3;
-  static constexpr size_t num_multi_draws = 12000;
+  static constexpr size_t num_multi_draws = 20000;
   static constexpr size_t num_paths = 16;
   static constexpr double num_elbo_draws = 1000;
   static constexpr double num_draws = 10000;
@@ -135,6 +135,7 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   for (Eigen::Index i = 0; i < all_mean_vals.cols(); i++) {
     EXPECT_NEAR(0, all_mean_vals(2, i), 1);
   }
+
   Eigen::MatrixXd all_sd_vals(3, 20);
   all_sd_vals.row(0) = sd_vals;
   all_sd_vals.row(1) = r_sd_vals;
@@ -282,9 +283,6 @@ TEST_F(ServicesPathfinderEightSchools, multi_and_single_psis_output) {
     auto&& streamer = single_param.get_stream();
     auto str = streamer.str();
     std::stringstream tmp_stream;
-    std::ofstream file("../../single_path_" + std::to_string(sentinal)
-                       + ".csv");
-    file << str;
     auto stan_data = stan::io::stan_csv_reader::parse(streamer, &tmp_stream);
     EXPECT_FALSE(str.rfind("Elapsed Time:") == std::string::npos);
     EXPECT_FALSE(str.rfind("(Pathfinder)") == std::string::npos);
