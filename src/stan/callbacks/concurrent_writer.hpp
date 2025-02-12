@@ -182,6 +182,8 @@ struct concurrent_writer {
   void wait() {
     continue_writing_ = false;
     if (thread_.joinable()) {
+      // If any threads are waiting for the queues to empty, notify them
+      cv.notify_all();
       thread_.join();
     }
   }
