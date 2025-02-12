@@ -114,21 +114,23 @@ struct concurrent_writer {
    */
   inline bool all_empty() {
     return str_messages_.empty() && vec_str_messages_.empty()
-                && eigen_messages_.empty() && null_writes_queued == 0;
+           && eigen_messages_.empty() && null_writes_queued == 0;
   }
 
   /**
    * Check if any of the queues are at capacity
    */
   inline bool any_hit_capacity() {
-    return str_messages_.size() >= wait_threshold || vec_str_messages_.size() >= wait_threshold
-          || eigen_messages_.size() >= wait_threshold || null_writes_queued >= wait_threshold;
+    return str_messages_.size() >= wait_threshold
+           || vec_str_messages_.size() >= wait_threshold
+           || eigen_messages_.size() >= wait_threshold
+           || null_writes_queued >= wait_threshold;
   }
 
   /**
    * Place a value in a queue for writing.
-   * @note If any of the queues are at capacity, the thread yields itself until the
-   *  the queues empty. In the case of spurious startups the wait just checks
+   * @note If any of the queues are at capacity, the thread yields itself until
+   * the the queues empty. In the case of spurious startups the wait just checks
    *  that the queues are not full.
    * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or
    * a string
@@ -137,9 +139,9 @@ struct concurrent_writer {
   template <typename T>
   void operator()(T&& t) {
     bool pushed = false;
-    if  (this->any_hit_capacity()){
+    if (this->any_hit_capacity()) {
       std::unique_lock lk(block_);
-      cv.wait(lk, [this_ = this]{ return !(this_->any_hit_capacity()); });
+      cv.wait(lk, [this_ = this] { return !(this_->any_hit_capacity()); });
     }
     while (!pushed) {
       if constexpr (stan::is_std_vector<T>::value) {
@@ -155,7 +157,9 @@ struct concurrent_writer {
         pushed = eigen_messages_.try_push(std::forward<T>(t));
       } else {
         static_assert(
-            !(stan::is_std_vector<T>::value || std::is_same_v<T, std::string> || stan::is_eigen_vector<T>::value),
+            !(stan::is_std_vector<T>::value
+              || std::is_same_v<
+                  T, std::string> || stan::is_eigen_vector<T>::value),
             "Unsupported type passed to concurrent_writer. This is an "
             "internal error. Please file an issue on the stan github "
             "repository with the error log from the compiler.\n"
