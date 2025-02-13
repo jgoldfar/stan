@@ -532,12 +532,13 @@ auto pathfinder_impl(RNG&& rng, LPFun&& lp_fun, AlphaVec&& alpha,
 /**
  * Write time lines for a pathfinder output file
  * @tparam MultiPathfinder If true, output uses (Pathfinders) else (Pathfinder)
+ * @tparam PSISTime If true, output includes PSIS time
  * @tparam ParamWriter Type inheriting from `stan::callbacks::writer`
  * @param[in,out] parameter_writer A callback writer for messages
  * @param pathfinders_delta_time Time taken for pathfinders
  * @param psis_delta_time Time taken for PSIS
  */
-template <bool MultiPathfinder, typename ParamWriter>
+template <bool MultiPathfinder, bool PSISTime, typename ParamWriter>
 inline void write_times(ParamWriter&& parameter_writer,
                         double pathfinders_delta_time, double psis_delta_time) {
   parameter_writer();
@@ -547,7 +548,7 @@ inline void write_times(ParamWriter&& parameter_writer,
         + std::string(" seconds")
         + (MultiPathfinder ? " (Pathfinders)" : " (Pathfinder)");
   parameter_writer(optim_time_str);
-  if (psis_delta_time != 0) {
+  if constexpr (PSISTime) {
     std::string psis_time_str = std::string(time_header.size(), ' ')
                                 + std::to_string(psis_delta_time)
                                 + " seconds (PSIS)";
@@ -1000,11 +1001,11 @@ inline auto pathfinder_lbfgs_single(
                     "intend to change this "
                     "please make it clear why.");
       auto&& single_stream = std::get<0>(parameter_writer.get_stream());
-      internal::write_times<false>(single_stream, pathfinder_delta_time, 0);
+      internal::write_times<false, false>(single_stream, pathfinder_delta_time, 0);
       return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                        internal::elbo_est_t{});
     } else {
-      internal::write_times<false>(parameter_writer, pathfinder_delta_time, 0);
+      internal::write_times<false, false>(parameter_writer, pathfinder_delta_time, 0);
       return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                        internal::elbo_est_t{});
     }

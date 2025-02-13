@@ -166,7 +166,7 @@ inline int pathfinder_lbfgs_multi(
     }
     double pathfinders_delta_time = stan::services::util::duration_diff(
         start_pathfinders_time, std::chrono::steady_clock::now());
-    write_times<true>(parameter_writer, pathfinders_delta_time, 0);
+    write_times<true, false>(parameter_writer, pathfinders_delta_time, 0);
     // Writes are done in loop, so just return
     return error_codes::OK;
   }
@@ -307,15 +307,13 @@ inline int pathfinder_lbfgs_multi(
                 ++psis_writer_position;
               }
             }
-            double psis_delta_time = stan::services::util::duration_diff(
-                start_psis_time, std::chrono::steady_clock::now());
-            write_times<false>(single_writer, pathfinders_delta_time, 0);
+            write_times<false, false>(single_writer, pathfinders_delta_time, 0);
           }
         });
     safe_write.wait();
     double psis_delta_time = stan::services::util::duration_diff(
         start_psis_time, std::chrono::steady_clock::now());
-    write_times<true>(parameter_writer, pathfinders_delta_time,
+    write_times<true, true>(parameter_writer, pathfinders_delta_time,
                       psis_delta_time);
     return error_codes::OK;
   }
@@ -357,10 +355,9 @@ inline int pathfinder_lbfgs_multi(
         }
       });
   safe_write.wait();
-
   double psis_delta_time = stan::services::util::duration_diff(
       start_psis_time, std::chrono::steady_clock::now());
-  write_times<true>(parameter_writer, pathfinders_delta_time, psis_delta_time);
+  write_times<true, true>(parameter_writer, pathfinders_delta_time, psis_delta_time);
   return error_codes::OK;
 }
 }  // namespace pathfinder
