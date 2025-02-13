@@ -1001,11 +1001,13 @@ inline auto pathfinder_lbfgs_single(
                     "intend to change this "
                     "please make it clear why.");
       auto&& single_stream = std::get<0>(parameter_writer.get_stream());
-      internal::write_times<false, false>(single_stream, pathfinder_delta_time, 0);
+      internal::write_times<false, false>(single_stream, pathfinder_delta_time,
+                                          0);
       return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                        internal::elbo_est_t{});
     } else {
-      internal::write_times<false, false>(parameter_writer, pathfinder_delta_time, 0);
+      internal::write_times<false, false>(parameter_writer,
+                                          pathfinder_delta_time, 0);
       return internal::ret_pathfinder<ReturnLpSamples>(error_codes::OK,
                                                        internal::elbo_est_t{});
     }

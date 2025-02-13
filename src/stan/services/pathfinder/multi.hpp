@@ -314,7 +314,7 @@ inline int pathfinder_lbfgs_multi(
     double psis_delta_time = stan::services::util::duration_diff(
         start_psis_time, std::chrono::steady_clock::now());
     write_times<true, true>(parameter_writer, pathfinders_delta_time,
-                      psis_delta_time);
+                            psis_delta_time);
     return error_codes::OK;
   }
   stan::callbacks::concurrent_writer safe_write{parameter_writer};
@@ -357,7 +357,8 @@ inline int pathfinder_lbfgs_multi(
   safe_write.wait();
   double psis_delta_time = stan::services::util::duration_diff(
       start_psis_time, std::chrono::steady_clock::now());
-  write_times<true, true>(parameter_writer, pathfinders_delta_time, psis_delta_time);
+  write_times<true, true>(parameter_writer, pathfinders_delta_time,
+                          psis_delta_time);
   return error_codes::OK;
 }
 }  // namespace pathfinder
