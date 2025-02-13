@@ -803,8 +803,8 @@ inline auto pathfinder_lbfgs_single(
           num_elbo_draws, iter_msg, logger);
       num_evals += pathfinder_res.first.fn_calls;
       print_log_remainder(write_log_cond, msg, ret, num_evals, lbfgs,
-                          pathfinder_res.first.elbo, elbo_best,
-                          lbfgs_ss, logger);
+                          pathfinder_res.first.elbo, elbo_best, lbfgs_ss,
+                          logger);
       if (unlikely(save_iterations)) {
         diagnostic_writer.write("lbfgs_success", true);
         diagnostic_writer.write("pathfinder_success", true);
