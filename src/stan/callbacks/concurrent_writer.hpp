@@ -57,7 +57,8 @@ struct concurrent_writer {
   // Max capacity of queue
   std::size_t max_capacity{1000 + max_threads};
   // Threshold where the writing threads will wait for the queues to empty
-  std::size_t wait_threshold{(max_threads > 1000) ? 0 : (max_capacity - (max_threads * 2))};
+  std::size_t wait_threshold{
+      (max_threads > 1000) ? 0 : (max_capacity - (max_threads * 2))};
   // Flag to stop the writing thread once all queues are empty
   bool continue_writing_{true};
 
@@ -85,9 +86,7 @@ struct concurrent_writer {
   /**
    * Checks if all queues are empty
    */
-  inline bool empty() {
-    return eigen_messages_.empty();
-  }
+  inline bool empty() { return eigen_messages_.empty(); }
 
   /**
    * Check if any of the queues are at capacity
@@ -114,12 +113,14 @@ struct concurrent_writer {
     }
     while (!pushed) {
       if constexpr (stan::is_std_vector<T>::value) {
-          pushed = eigen_messages_.try_push(
-              Eigen::RowVectorXd::Map(t.data(), t.size()));
+        pushed = eigen_messages_.try_push(
+            Eigen::RowVectorXd::Map(t.data(), t.size()));
       } else if constexpr (stan::is_eigen_vector<T>::value) {
         pushed = eigen_messages_.try_push(std::forward<T>(t));
       } else {
-        constexpr bool is_numeric_std_vector = stan::is_std_vector<T>::value && std::is_arithmetic_v<stan::value_type_t<T>>;
+        constexpr bool is_numeric_std_vector
+            = stan::is_std_vector<T>::value
+              && std::is_arithmetic_v<stan::value_type_t<T>>;
         static_assert(
             (!is_numeric_std_vector && !stan::is_eigen_vector<T>::value),
             "Unsupported type passed to concurrent_writer. This is an "
