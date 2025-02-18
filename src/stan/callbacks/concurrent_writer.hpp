@@ -44,12 +44,6 @@ template <typename Writer>
 struct concurrent_writer {
   // A reference to the writer to write to
   std::reference_wrapper<Writer> writer;
-  // Number of null writes queued
-  std::atomic<int> null_writes_queued{0};
-  // Queue for string messages
-  tbb::concurrent_bounded_queue<std::string> str_messages_{};
-  // Queue for vector of strings messages
-  tbb::concurrent_bounded_queue<std::vector<std::string>> vec_str_messages_{};
   // Queue for Eigen vector messages
   tbb::concurrent_bounded_queue<Eigen::RowVectorXd> eigen_messages_{};
   // Block threads from writing to queues if the queues are full
@@ -63,7 +57,7 @@ struct concurrent_writer {
   // Max capacity of queue
   std::size_t max_capacity{1000 + max_threads};
   // Threshold where the writing threads will wait for the queues to empty
-  std::size_t wait_threshold{max_capacity - (max_threads * 2)};
+  std::size_t wait_threshold{(max_threads > 1000) ? 0 : (max_capacity - (max_threads * 2))};
   // Flag to stop the writing thread once all queues are empty
   bool continue_writing_{true};
 
@@ -73,35 +67,14 @@ struct concurrent_writer {
    * @param writer A writer to write to
    */
   explicit concurrent_writer(Writer& writer) : writer(writer) {
-    str_messages_.set_capacity(max_capacity);
-    vec_str_messages_.set_capacity(max_capacity);
     eigen_messages_.set_capacity(max_capacity);
     thread_ = std::thread([&]() {
-      std::string str;
-      std::vector<std::string> vec_str;
       Eigen::RowVectorXd eigen;
-      while (continue_writing_
-             || !(str_messages_.empty() && vec_str_messages_.empty()
-                  && eigen_messages_.empty() && null_writes_queued == 0)) {
-        while (null_writes_queued > 0) {
-          auto num_null_writes
-              = null_writes_queued.load(std::memory_order_relaxed);
-          for (int i = 0; i < num_null_writes; ++i) {
-            writer();
-          }
-          null_writes_queued.fetch_sub(num_null_writes,
-                                       std::memory_order_relaxed);
-        }
-        while (str_messages_.try_pop(str)) {
-          writer(str);
-        }
-        while (vec_str_messages_.try_pop(vec_str)) {
-          writer(vec_str);
-        }
+      while (continue_writing_ || !eigen_messages_.empty()) {
         while (eigen_messages_.try_pop(eigen)) {
           writer(eigen);
         }
-        if (this->all_empty()) {
+        if (this->empty()) {
           cv.notify_all();
           std::this_thread::yield();
         }
@@ -112,19 +85,15 @@ struct concurrent_writer {
   /**
    * Checks if all queues are empty
    */
-  inline bool all_empty() {
-    return str_messages_.empty() && vec_str_messages_.empty()
-           && eigen_messages_.empty() && null_writes_queued == 0;
+  inline bool empty() {
+    return eigen_messages_.empty();
   }
 
   /**
    * Check if any of the queues are at capacity
    */
-  inline bool any_hit_capacity() {
-    return str_messages_.size() >= wait_threshold
-           || vec_str_messages_.size() >= wait_threshold
-           || eigen_messages_.size() >= wait_threshold
-           || null_writes_queued >= wait_threshold;
+  inline bool hit_capacity() {
+    return eigen_messages_.size() >= wait_threshold;
   }
 
   /**
@@ -139,27 +108,20 @@ struct concurrent_writer {
   template <typename T>
   void operator()(T&& t) {
     bool pushed = false;
-    if (this->any_hit_capacity()) {
+    if (this->hit_capacity()) {
       std::unique_lock lk(block_);
-      cv.wait(lk, [this_ = this] { return !(this_->any_hit_capacity()); });
+      cv.wait(lk, [this_ = this] { return !(this_->hit_capacity()); });
     }
     while (!pushed) {
       if constexpr (stan::is_std_vector<T>::value) {
-        if constexpr (std::is_arithmetic_v<stan::value_type_t<T>>) {
           pushed = eigen_messages_.try_push(
               Eigen::RowVectorXd::Map(t.data(), t.size()));
-        } else {
-          pushed = vec_str_messages_.try_push(std::forward<T>(t));
-        }
-      } else if constexpr (std::is_same_v<T, std::string>) {
-        pushed = str_messages_.try_push(std::forward<T>(t));
       } else if constexpr (stan::is_eigen_vector<T>::value) {
         pushed = eigen_messages_.try_push(std::forward<T>(t));
       } else {
+        constexpr bool is_numeric_std_vector = stan::is_std_vector<T>::value && std::is_arithmetic_v<stan::value_type_t<T>>;
         static_assert(
-            !(stan::is_std_vector<T>::value
-              || std::is_same_v<
-                  T, std::string> || stan::is_eigen_vector<T>::value),
+            (!is_numeric_std_vector && !stan::is_eigen_vector<T>::value),
             "Unsupported type passed to concurrent_writer. This is an "
             "internal error. Please file an issue on the stan github "
             "repository with the error log from the compiler.\n"
@@ -170,11 +132,6 @@ struct concurrent_writer {
       }
     }
   }
-
-  /**
-   * Writes a comment prefix to the writer.
-   */
-  void operator()() { null_writes_queued++; }
 
   /**
    * Waits till all writes are finished on the thread
@@ -204,7 +161,6 @@ struct concurrent_writer {
   void operator()(T&& t) {
     writer(std::forward<T>(t));
   }
-  void operator()() { writer(); }
   inline static constexpr void wait() {}
 };
 #endif
