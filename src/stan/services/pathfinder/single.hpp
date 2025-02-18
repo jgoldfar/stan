@@ -895,7 +895,7 @@ inline auto pathfinder_lbfgs_single(
     std::vector<std::string> names;
     names.push_back("lp_approx__");
     names.push_back("lp__");
-    names.push_back("pathfinder__");
+    names.push_back("path__");
     model.constrained_param_names(names, true, true);
     if constexpr (InMultiPathfinder) {
       static_assert(stan::callbacks::is_tee_writer_v<ParamWriter>,

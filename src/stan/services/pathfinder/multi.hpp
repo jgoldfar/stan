@@ -112,7 +112,7 @@ inline int pathfinder_lbfgs_multi(
   std::vector<std::string> param_names;
   param_names.push_back("lp_approx__");
   param_names.push_back("lp__");
-  param_names.push_back("pathfinder__");
+  param_names.push_back("path__");
   model.constrained_param_names(param_names, true, true);
   parameter_writer(param_names);
   // All work is done in the parallel_for loop
