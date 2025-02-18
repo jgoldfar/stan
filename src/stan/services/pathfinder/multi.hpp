@@ -292,7 +292,7 @@ inline int pathfinder_lbfgs_multi(
               constrain_fun(approx_samples_constrained_col, unconstrained_col,
                             model, local_rng);
               sample_row.head(2) = lp_draws.row(j).matrix();
-              sample_row(2) = elbo_estimates[i].first;
+              sample_row(2) = stride_id + path_num;
               sample_row.tail(uc_param_size) = approx_samples_constrained_col;
               single_writer(sample_row);
               while ((elbo_estimates[i].first * num_samples + j)
@@ -341,7 +341,7 @@ inline int pathfinder_lbfgs_multi(
             constrain_fun(approx_samples_constrained_col, unconstrained_col,
                           model, rng_local);
             sample_row.head(2) = lp_draws.row(path_sample_idx).matrix();
-            sample_row(2) = elbo_estimates[path_num].first;
+            sample_row(2) = stride_id + elbo_estimates[path_num].first;
             sample_row.tail(uc_param_size) = approx_samples_constrained_col;
             safe_write(sample_row);
             // If we see the same draw idx more than once, just increment j and

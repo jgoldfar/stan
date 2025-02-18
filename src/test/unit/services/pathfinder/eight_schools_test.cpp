@@ -122,7 +122,7 @@ TEST_F(ServicesPathfinderEightSchools, multi) {
   EXPECT_EQ(param_vals.rows(), num_multi_draws);
   for (Eigen::Index i = 0; i < num_multi_draws; i++) {
     EXPECT_GE(param_vals.col(2)(i), 0);
-    EXPECT_LE(param_vals.col(2)(i), num_paths - 1);
+    EXPECT_LE(param_vals.col(2)(i), num_paths);
   }
   auto param_tmp = param_vals(Eigen::all, param_indices);
   auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);
@@ -287,7 +287,7 @@ TEST_F(ServicesPathfinderEightSchools, multi_and_single_psis_output) {
     EXPECT_EQ(stan_data.samples.rows(), num_multi_draws);
     EXPECT_EQ(stan_data.samples.cols(), 21);
   }
-  int sentinal = 0;
+  int sentinal = 1;
   for (auto&& single_param : single_path_parameter_writer) {
     auto&& streamer = single_param.get_stream();
     auto str = streamer.str();
@@ -387,7 +387,7 @@ TEST_F(ServicesPathfinderEightSchools, multi_and_single_nopsis_output) {
     EXPECT_EQ(stan_data.samples.rows(), num_draws * num_paths);
     EXPECT_EQ(stan_data.samples.cols(), 21);
   }
-  int sentinal = 0;
+  int sentinal = 1;
   for (auto&& single_param : single_path_parameter_writer) {
     auto&& streamer = single_param.get_stream();
     auto&& str = streamer.str();
@@ -446,7 +446,7 @@ TEST_F(ServicesPathfinderEightSchools, single) {
 
   Eigen::MatrixXd param_vals = parameter.get_eigen_state_values();
   for (auto&& x_i : param_vals.col(2)) {
-    EXPECT_EQ(x_i, stride_id - 1);
+    EXPECT_EQ(x_i, stride_id);
   }
   auto param_tmp = param_vals(Eigen::all, param_indices);
   auto mean_sd_pair = stan::test::get_mean_sd(param_tmp);

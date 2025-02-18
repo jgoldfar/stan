@@ -911,7 +911,7 @@ inline auto pathfinder_lbfgs_single(
     }
     Eigen::Matrix<double, 1, Eigen::Dynamic> constrained_draws_vec(
         names.size());
-    constrained_draws_vec(2) = stride_id - ((stride_id == 0) ? 0 : 1);
+    constrained_draws_vec(2) = stride_id;
     Eigen::Array<double, Eigen::Dynamic, 1> lp_ratio;
     auto&& elbo_draws = elbo_best.repeat_draws;
     auto&& elbo_lp_ratio = elbo_best.lp_ratio;

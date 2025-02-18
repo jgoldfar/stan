@@ -100,8 +100,7 @@ struct concurrent_writer {
    * @note If any of the queues are at capacity, the thread yields itself until
    * the the queues empty. In the case of spurious startups the wait just checks
    *  that the queues are not full.
-   * @tparam T Either an `std::vector<std::string|double>`, an Eigen vector, or
-   * a string
+   * @tparam T An Eigen vector
    * @param t A value to put on a queue
    */
   template <typename T>
