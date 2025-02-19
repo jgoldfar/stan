@@ -567,8 +567,8 @@ inline void write_times(ParamWriter&& parameter_writer,
 /**
  * Run single path pathfinder with specified initializations and write results
  * to the specified callbacks and it returns a return code.
- * @tparam ReturnLpSamples if `true` single pathfinder returns the lp_ratio
- * vector and approximate samples. If `false` only gives a return code.
+ * @tparam ReturnLpSamples if `true` single pathfinder returns the error code
+ * and the elbo from the best pathfinder. If `false` only gives a return code.
  * @tparam InMultiPathfinder if `true` the pathfinder is called from the multi
  * pathfinder. If `false` the pathfinder is called directly.
  * @tparam Model type of model
@@ -902,8 +902,7 @@ inline auto pathfinder_lbfgs_single(
                     "ReturnLpSamples is false but the parameter_writer is not "
                     "a tee_writer! "
                     "Multi pathfinder assumes we use a tee writer here, if you "
-                    "intend to change this "
-                    "please make it clear why.");
+                    "intend to change this please make it clear why.");
       auto&& single_stream = std::get<0>(parameter_writer.get_stream());
       single_stream(names);
     } else {

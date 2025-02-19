@@ -13,7 +13,7 @@
 namespace stan::callbacks {
 #ifdef STAN_THREADS
 /**
- * Takes a writer and makes it thread safe via multiple queues.
+ * Enables thread-safe writing of numeric values to a writer.
  * On construction, a thread is spawned to write to the writer.
  * This class uses an `std::thread` instead of a tbb task graph because
  * of deadlocking issues. A deadlock can happen in two major cases.
@@ -57,8 +57,7 @@ struct concurrent_writer {
   // Max capacity of queue
   std::size_t max_capacity{1000 + max_threads};
   // Threshold where the writing threads will wait for the queues to empty
-  std::size_t wait_threshold{
-      (max_threads > 1000) ? 0 : (max_capacity - (max_threads * 2))};
+  std::size_t wait_threshold{max_capacity - max_threads - 1};
   // Flag to stop the writing thread once all queues are empty
   bool continue_writing_{true};
 

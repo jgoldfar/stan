@@ -173,12 +173,7 @@ inline int pathfinder_lbfgs_multi(
   // Save idx of pathfinder and it's elbo for resampling later
   tbb::concurrent_vector<std::pair<Eigen::Index, internal::elbo_est_t>>
       elbo_estimates;
-  elbo_estimates.reserve(num_paths + 10);
-  auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
-                          auto&& model, auto&& rng) {
-    model.write_array(rng, unconstrained_draws, constrained_draws);
-    return constrained_draws;
-  };
+  elbo_estimates.reserve(num_paths);
   try {
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_paths), [&](tbb::blocked_range<int> r) {
@@ -266,6 +261,11 @@ inline int pathfinder_lbfgs_multi(
     }
     single_path_psis_idxs[path_num].second = i + 1;
   }
+  auto constrain_fun = [](auto&& constrained_draws, auto&& unconstrained_draws,
+                          auto&& model, auto&& rng) {
+    model.write_array(rng, unconstrained_draws, constrained_draws);
+    return constrained_draws;
+  };
   // If one is null, then all are null
   if (unlikely(single_path_parameter_writer[0].is_valid())) {
     stan::callbacks::concurrent_writer safe_write{parameter_writer};
