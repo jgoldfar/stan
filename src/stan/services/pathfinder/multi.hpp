@@ -139,8 +139,7 @@ inline int pathfinder_lbfgs_multi(
                       num_iterations, num_elbo_draws, num_draws,
                       save_iterations, refresh, interrupt, logger,
                       init_writers[iter], multi_param_writer,
-                      single_path_diagnostic_writer[iter], calculate_lp,
-                      psis_resample);
+                      single_path_diagnostic_writer[iter], calculate_lp);
               if (pathfinder_ret != error_codes::OK) {
                 logger.error(std::string("Pathfinder iteration: ")
                              + std::to_string(iter) + " failed.");
@@ -187,8 +186,7 @@ inline int pathfinder_lbfgs_multi(
                     tol_grad, tol_rel_grad, tol_param, num_iterations,
                     num_elbo_draws, num_draws, save_iterations, refresh,
                     interrupt, logger, init_writers[iter], non_writer,
-                    single_path_diagnostic_writer[iter], calculate_lp,
-                    psis_resample);
+                    single_path_diagnostic_writer[iter], calculate_lp);
             if (unlikely(std::get<0>(pathfinder_ret) != error_codes::OK)) {
               logger.error(std::string("Pathfinder iteration: ")
                            + std::to_string(iter) + " failed.");

@@ -29,15 +29,17 @@ namespace internal {
  * Check the optimization direction is strictly positive and curvature is 'tame'
  * @tparam EigVec1 Type derived from `Eigen::DenseBase` with one column at
  * compile time
+ * @tparam EigVec2 Type derived from `Eigen::DenseBase` with one column at
+ * compile time
  * @param Yk Vector of gradients
  * @param Sk Vector of values
  * @return boolean with true if both the optimization direction `Dk` is greater
  * than zero and the curvature `thetak` is less than 1e12.
  */
-template <typename EigVec, stan::require_eigen_vector_t<EigVec>* = nullptr>
-inline bool check_curve(const EigVec& Yk, const EigVec& Sk) {
-  auto Dk = Yk.dot(Sk);
-  auto thetak = std::abs(Yk.array().square().sum() / Dk);
+template <typename EigVec1, typename EigVec2, stan::require_all_eigen_vector_t<EigVec1, EigVec2>* = nullptr>
+inline bool check_curve(const EigVec1& Yk, const EigVec2& Sk) {
+  const auto Dk = Yk.dot(Sk);
+  const auto thetak = std::abs(Yk.array().square().sum() / Dk);
   return Dk > 0 && thetak <= 1e12;
 }
 
@@ -101,8 +103,6 @@ struct elbo_est_t {
  * approximation.
  * @tparam EigMat A type inheriting from `Eigen::DenseBase` with dynamic rows
  * and columns.
- * @tparam EigVec A type inheriting from `Eigen::DenseBase` with the compile
- * time number of columns equal to 1.
  * @param u A matrix of gaussian IID samples with rows equal to the size of the
  * number of samples to be made and columns equal to the number of parameters.
  * @param taylor_approx Approximation from `taylor_approximation`.
@@ -135,18 +135,12 @@ inline Eigen::MatrixXd approximate_samples(
  * approximation.
  * @tparam EigVec1 A type inheriting from `Eigen::DenseBase` with the compile
  * time number of columns equal to 1.
- * @tparam EigVec2 A type inheriting from `Eigen::DenseBase` with the compile
- * time number of columns equal to 1.
- * @param u A matrix of gaussian IID samples with columns equal to the size of
- * the number of samples to be made and rows equal to the number of parameters.
+ * @param u A vector of gaussian IID samples with columns equal to 1 and rows equal to the number of parameters.
  * @param taylor_approx Approximation from `taylor_approximation`.
- * @return A matrix with columns equal to the number of samples and rows equal
- * to the number of parameters. Each column represents an approximate draw for
- * the set of parameters.
  * @return A vector of an approximated sample derived from the taylor
  * approximation.
  */
-template <typename EigVec1, typename EigVec2,
+template <typename EigVec1,
           require_eigen_vector_t<EigVec1>* = nullptr>
 inline Eigen::VectorXd approximate_samples(
     EigVec1&& u, const taylor_approx_t& taylor_approx) {
@@ -195,14 +189,11 @@ generate_matrix(Generator&& variate_generator, const Eigen::Index num_params,
  * @tparam ReturnElbo If true, calculate ELBO and return it in `elbo_est_t`. If
  * `false` ELBO is set in the return as `-Infinity`
  * @tparam LPF Type of log probability functor
- * @tparam ConstrainF Type of functor for constraining parameters
  * @tparam RNG Type of random number generator
  * @tparam EigVec Type inheriting from `Eigen::DenseBase` with 1 column at
  * compile time.
  * @tparam Logger Type of logger callback
  * @param lp_fun Functor to calculate the log density
- * @param constrain_fun A functor to transform parameters to the constrained
- * space
  * @param[in,out] rng A generator to produce standard gaussian random variables
  * @param taylor_approx The taylor approximation at this iteration of LBFGS
  * @param num_samples Number of approximate samples to generate
@@ -424,7 +415,7 @@ inline taylor_approx_t taylor_approximation_sparse(
  * @param alpha The diagonal of the approximate hessian
  * @param Dk vector of Columnwise products of parameter and gradients with size
  * equal to history size
- * @param ninvRST
+ * @param ninvRST The solution of X = R^-1 * S
  * @param point_est The parameters for the given iteration of LBFGS
  * @param grad_est The gradients for the given iteration of LBFGS
  * @return The components of either the sparse or dense taylor approximation
@@ -451,7 +442,6 @@ inline taylor_approx_t taylor_approximation(
  * Construct the return for directly calling single pathfinder or
  * calling single pathfinder from multi pathfinder.
  * @tparam ReturnLpSamples Dictates what is returned from pathfinder.
- * @tparam EigMat A type inheriting from `Eigen::DenseBase`
  * @tparam EigVec A type inheriting from `Eigen::DenseBase` with one column
  * defined at compile time
  * @return If `ReturnLpSamples` is `true`, returns a pair with the return code
@@ -470,23 +460,18 @@ inline auto ret_pathfinder(int return_code, EigVec&& elbo_est) noexcept {
  * Estimate the approximate draws given the taylor approximation.
  * @tparam RNG Type of random number generator
  * @tparam LPFun Type of log probability functor
- * @tparam ConstrainFun Type of functor for constraining parameters
- * @tparam Logger Type inheriting from `stan::callbacks::logger`
  * @tparam AlphaVec Type inheriting from `Eigen::DenseBase` with 1 column at
  * compile time
- * @tparam GradBuffer Boost circular buffer with inner Eigen vector type
  * @tparam CurrentParams Type inheriting from `Eigen::DenseBase` with 1 column
  * at compile time
  * @tparam CurentGrads Type inheriting from `Eigen::DenseBase` with 1 column at
  * compile time
  * @tparam ParamMat Type inheriting from `Eigen::DenseBase` with dynamic rows
  * and columns at compile time.
- * @tparam Logger Type of logger callback
+ * @tparam Logger Type inheriting from `stan::callbacks::logger`
  * @param[in,out] rng A generator to produce standard gaussian random variables
- * @param alpha The approximation of the diagonal hessian
  * @param lp_fun Functor to calculate the log density
- * @param constrain_fun A functor to transform parameters to the constrained
- * space
+ * @param alpha The approximation of the diagonal hessian
  * @param current_params Parameters from iteration of LBFGS
  * @param current_grads Gradients from iteration of LBFGS
  * @param Ykt_mat Matrix of the last `history_size` changes in the gradient.
@@ -633,8 +618,7 @@ inline auto pathfinder_lbfgs_single(
     int num_elbo_draws, int num_draws, bool save_iterations, int refresh,
     callbacks::interrupt& interrupt, callbacks::logger& logger,
     callbacks::writer& init_writer, ParamWriter& parameter_writer,
-    DiagnosticWriter& diagnostic_writer, bool calculate_lp = true,
-    bool psis_resample = false) {
+    DiagnosticWriter& diagnostic_writer, bool calculate_lp = true) {
   const auto start_pathfinder_time = std::chrono::steady_clock::now();
   stan::rng_t rng = util::create_rng(random_seed, stride_id);
   std::vector<int> disc_vector;
