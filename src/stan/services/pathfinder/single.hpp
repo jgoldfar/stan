@@ -36,7 +36,8 @@ namespace internal {
  * @return boolean with true if both the optimization direction `Dk` is greater
  * than zero and the curvature `thetak` is less than 1e12.
  */
-template <typename EigVec1, typename EigVec2, stan::require_all_eigen_vector_t<EigVec1, EigVec2>* = nullptr>
+template <typename EigVec1, typename EigVec2,
+          stan::require_all_eigen_vector_t<EigVec1, EigVec2>* = nullptr>
 inline bool check_curve(const EigVec1& Yk, const EigVec2& Sk) {
   const auto Dk = Yk.dot(Sk);
   const auto thetak = std::abs(Yk.array().square().sum() / Dk);
@@ -135,13 +136,13 @@ inline Eigen::MatrixXd approximate_samples(
  * approximation.
  * @tparam EigVec1 A type inheriting from `Eigen::DenseBase` with the compile
  * time number of columns equal to 1.
- * @param u A vector of gaussian IID samples with columns equal to 1 and rows equal to the number of parameters.
+ * @param u A vector of gaussian IID samples with columns equal to 1 and rows
+ * equal to the number of parameters.
  * @param taylor_approx Approximation from `taylor_approximation`.
  * @return A vector of an approximated sample derived from the taylor
  * approximation.
  */
-template <typename EigVec1,
-          require_eigen_vector_t<EigVec1>* = nullptr>
+template <typename EigVec1, require_eigen_vector_t<EigVec1>* = nullptr>
 inline Eigen::VectorXd approximate_samples(
     EigVec1&& u, const taylor_approx_t& taylor_approx) {
   if (taylor_approx.use_full) {
