@@ -525,8 +525,8 @@ class deserializer {
 
   /**
    * Return the next simplex of the specified size (using one fewer
-   * unconstrained scalars). This particular transformation is linear, not
-   * requiring a Jacobian adjustment.
+   * unconstrained scalars), incrementing the specified reference with the
+   * log absolute Jacobian determinant.
    *
    * <p>See <code>stan::math::simplex_constrain(Eigen::Matrix,T&)</code>.
    *
@@ -550,8 +550,8 @@ class deserializer {
 
   /**
    * Return the next simplex of the specified size (using one fewer
-   * unconstrained scalars). This particular transformation is linear, not
-   * requiring a Jacobian adjustment.
+   * unconstrained scalars), incrementing the specified reference with the
+   * log absolute Jacobian determinant.
    *
    * <p>See <code>stan::math::simplex_constrain(Eigen::Matrix,T&)</code>.
    *
@@ -634,8 +634,8 @@ class deserializer {
 
   /**
    * Return the next zero sum vector of the specified size (using one fewer
-   * unconstrained scalars), incrementing the specified reference with the
-   * log absolute Jacobian determinant (no adjustment, in this case).
+   * unconstrained scalars). This particular transformation is linear, not
+   * requiring a Jacobian adjustment.
    *
    * <p>See <code>stan::math::sum_to_zero_constrain(Eigen::Matrix,T&)</code>.
    *
