@@ -18,12 +18,7 @@ on:
 jobs:
   run-tests:
     name: run stan tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04]
-        python-version: [3.8]
-      fail-fast: false
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out source code
         uses: actions/checkout@v3
@@ -39,12 +34,7 @@ jobs:
 
   run-fvar-var-tests:
     name: run stan fvar-var model tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04]
-        python-version: [3.8]
-      fail-fast: false
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out source code
         uses: actions/checkout@v3
