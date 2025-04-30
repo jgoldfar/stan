@@ -71,7 +71,7 @@ class stepsize_adaptation : public base_adaptation {
   }
 
   void complete_adaptation(double& epsilon) {
-    if (x_bar_ > 0)
+    if (counter_ > 0)
       epsilon = std::exp(x_bar_);
   }
 
