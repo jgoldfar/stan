@@ -374,7 +374,7 @@ TEST_F(RvalueRev, uni_stdvec_negative_minmax_vec) {
       = rvalue(x, "", index_uni(2), index_min_max(2, 1));
   EXPECT_EQ(0U, y.size());
   EXPECT_NO_THROW(rvalue(x, "", index_uni(1), index_min_max(3, 0)));
-  EXPECT_NO_THROW(rvalue(x, "" , index_uni(1), index_min_max(15, 2)));
+  EXPECT_NO_THROW(rvalue(x, "", index_uni(1), index_min_max(15, 2)));
 }
 TEST_F(RvalueRev, uni_stdvec_omni_vec) {
   using Eigen::VectorXd;
