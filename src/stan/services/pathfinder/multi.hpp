@@ -346,7 +346,7 @@ inline int pathfinder_lbfgs_multi(
             // write again if there are remaining draws
             if (j < (psis_draw_idxs.size() - 1)) {
               while (j < (single_path_psis_idxs[i].second)
-                      && draw_idx == psis_draw_idxs.coeff(j + 1)) {
+                     && draw_idx == psis_draw_idxs.coeff(j + 1)) {
                 safe_write(sample_row);
                 ++j;
               }
